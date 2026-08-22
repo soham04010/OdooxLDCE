@@ -67,25 +67,33 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadDashboard = async () => {
-      let storedUser: User | null = null;
-      const stored = localStorage.getItem("user");
-
-      if (stored) {
-        try {
-          storedUser = JSON.parse(stored) as User;
-          if (!cancelled) setUser(storedUser);
-        } catch {
-          localStorage.removeItem("user");
-        }
+    const checkAuth = async () => {
+      const u = localStorage.getItem("user");
+      if (!u) {
+        router.push("/login");
+        return;
       }
 
+      let parsed: any;
       try {
-        const dashboardRequest = fetch(
-          "http://localhost:5000/api/dashboard",
-          { credentials: "include" }
-        );
-        const userRequest = storedUser
+        parsed = JSON.parse(u);
+      } catch {
+        router.push("/login");
+        return;
+      }
+
+      if (parsed.role === "admin") {
+        router.push("/admin");
+        return;
+      }
+
+      setUser(parsed as User);
+
+      try {
+        const dashboardRequest = fetch("http://localhost:5000/api/dashboard", {
+          credentials: "include",
+        });
+        const userRequest = parsed
           ? Promise.resolve<Response | null>(null)
           : fetch("http://localhost:5000/api/auth/me", {
               credentials: "include",
@@ -122,11 +130,7 @@ export default function DashboardPage() {
         if (!cancelled) setLoading(false);
       }
     };
-
-    void loadDashboard();
-    return () => {
-      cancelled = true;
-    };
+    checkAuth();
   }, [router]);
 
   const regions = useMemo(
