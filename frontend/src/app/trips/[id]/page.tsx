@@ -189,7 +189,28 @@ export default function BuildItineraryPage() {
       <Navbar />
       
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="text-2xl font-bold mb-6">GlobalTrotter Itinerary Builder</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">GlobalTrotter Itinerary Builder</h1>
+          {data && (
+            <Button 
+              variant={data.trip.isPublic ? "secondary" : "default"} 
+              onClick={async () => {
+                const res = await fetch(`http://localhost:5000/api/trips/${tripId}/publish`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ isPublic: !data.trip.isPublic, description: data.trip.description || "My amazing trip!" }),
+                  credentials: "include"
+                });
+                if (res.ok) {
+                  fetchTrip();
+                  alert(data.trip.isPublic ? "Trip made private." : "Trip published to community!");
+                }
+              }}
+            >
+              {data.trip.isPublic ? "Unpublish" : "Publish to Community"}
+            </Button>
+          )}
+        </div>
 
         {loading ? (
           <div className="space-y-4">
