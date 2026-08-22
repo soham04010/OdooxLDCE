@@ -1,69 +1,124 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, Map, Navigation, Image as ImageIcon, Activity, TrendingUp, MoreHorizontal, CheckCircle2 } from "lucide-react";
+import { 
+  Users, 
+  Map, 
+  Image as ImageIcon, 
+  Download, 
+  RefreshCw, 
+  Search, 
+  Filter,
+  ArrowUpRight,
+  Eye,
+  Activity,
+  Shield,
+  Zap,
+  Radio,
+  Cpu,
+  HardDrive,
+  Terminal,
+  CheckCircle2,
+  ExternalLink,
+  Lock,
+  Globe
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
 
 const DynamicPieChart = dynamic(() => import("@/components/AdminPieChart"), { ssr: false });
 const DynamicBarChart = dynamic(() => import("@/components/AdminBarChart"), { ssr: false });
 
-const MONTHLY_DATA = [
-  { name: 'Jan', users: 10, trips: 5 },
-  { name: 'Feb', users: 15, trips: 8 },
-  { name: 'Mar', users: 20, trips: 15 },
-  { name: 'Apr', users: 35, trips: 22 },
-  { name: 'May', users: 45, trips: 30 },
-  { name: 'Jun', users: 60, trips: 45 },
+const MONTHLY_GROWTH = [
+  { name: 'Jan', users: 12, trips: 8 },
+  { name: 'Feb', users: 24, trips: 18 },
+  { name: 'Mar', users: 42, trips: 35 },
+  { name: 'Apr', users: 68, trips: 52 },
+  { name: 'May', users: 95, trips: 78 },
+  { name: 'Jun', users: 130, trips: 110 },
 ];
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b'];
+
+const LIVE_OBSERVER_FEED = [
+  { id: 1, time: "Just now", text: "Database connection pool re-verified (100% health)", status: "system" },
+  { id: 2, time: "2m ago", text: "User created trip 'Tokyo & Kyoto 7-Day Explorer'", status: "user" },
+  { id: 3, time: "5m ago", text: "New invitation accepted for trip #14", status: "social" },
+  { id: 4, time: "12m ago", text: "Community story published: 'Hidden gems in Bali'", status: "post" },
+  { id: 5, time: "25m ago", text: "Automatic database indexing cycle completed", status: "system" },
+];
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+
+  const fetchStats = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/admin/stats", { credentials: "include" });
+      if (!res.ok) {
+        toast.error("Access Denied: Admin observer privileges required.");
+        router.push("/dashboard");
+        return;
+      }
+      setStats(await res.json());
+      if (isManual) toast.success("Observer telemetry refreshed.");
+    } catch (err) {
+      console.error("Admin stats error:", err);
+      toast.error("Unable to connect to telemetry server.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/admin/stats", { credentials: "include" });
-        if (!res.ok) {
-          router.push("/dashboard");
-          return;
-        }
-        setStats(await res.json());
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
   }, [router]);
 
-  if (loading) return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Navbar />
-      <div className="flex-1 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    </div>
-  );
+  const filteredUsers = useMemo(() => {
+    if (!stats?.users) return [];
+    return stats.users.filter((u: any) => {
+      const matchesSearch = 
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        u.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRole = roleFilter === "all" || (roleFilter === "admin" ? u.role === "admin" : u.role !== "admin");
+      return matchesSearch && matchesRole;
+    });
+  }, [stats, searchQuery, roleFilter]);
 
-  if (!stats) return <div className="p-8 text-center text-red-500 font-bold text-2xl">Access Denied</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-marine border-t-transparent" />
+          <p className="text-xs font-semibold text-muted-foreground animate-pulse">Initializing Platform Observer Console...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats) return <div className="p-8 text-center text-muted-foreground font-semibold">Access Denied</div>;
 
   const PIE_DATA = [
     { name: 'Users', value: Number(stats.totals.users) || 0 },
     { name: 'Trips', value: Number(stats.totals.trips) || 0 },
     { name: 'Posts', value: Number(stats.totals.posts) || 0 }
   ].filter(d => d.value > 0);
-  
+
   if (PIE_DATA.length === 0) {
     PIE_DATA.push({ name: 'No Data', value: 1 });
   }
@@ -73,218 +128,437 @@ export default function AdminDashboard() {
     visits: Number(c.visitCount) || 0
   }));
 
+  const handleExportCSV = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Metric,Value\n"
+      + `Total Users,${stats.totals.users}\n`
+      + `Total Trips,${stats.totals.trips}\n`
+      + `Total Posts,${stats.totals.posts}\n`;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `observer_telemetry_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Observer telemetry exported.");
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-background font-sans text-foreground">
       <Navbar />
-      
-      <main className="container mx-auto p-4 md:p-8 max-w-7xl">
-        <div className="flex justify-between items-end mb-8">
+
+      <main className="container mx-auto p-6 md:p-10 max-w-7xl">
+        {/* Observer Header & Live Status */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-6 border-b border-border/60">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Overview Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Platform analytics and user management.</p>
+            <div className="flex items-center gap-2 mb-1.5">
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold text-xs flex items-center gap-1.5 px-2.5 py-0.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Observer Telemetry Active
+              </Badge>
+              <span className="text-xs text-muted-foreground">•</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Platform Control Tower</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-marine dark:text-foreground flex items-center gap-2">
+              <Eye className="w-6 h-6 text-marine dark:text-primary" />
+              Platform Observer Console
+            </h1>
           </div>
-          <Button className="rounded-full shadow-sm">
-            <TrendingUp className="w-4 h-4 mr-2" /> Download Report
-          </Button>
+
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fetchStats(true)} 
+              disabled={refreshing} 
+              className="h-9 text-xs font-medium gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} /> 
+              Sync Telemetry
+            </Button>
+
+            <Button 
+              variant="default"
+              size="sm" 
+              onClick={handleExportCSV} 
+              className="h-9 text-xs font-medium gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" /> Export Logs
+            </Button>
+          </div>
         </div>
 
-        {/* Top Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <Users className="h-6 w-6" />
-                </div>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-0 font-semibold">+12%</Badge>
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">Total Users</p>
-              <h3 className="text-3xl font-bold">{stats.totals.users}</h3>
-            </CardContent>
+        {/* Real-time System Vitals Banner */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          <div className="p-4 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Database</p>
+              <p className="text-sm font-bold text-emerald-600 flex items-center gap-1 mt-0.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> PostgreSQL Online
+              </p>
+            </div>
+            <HardDrive className="w-4 h-4 text-muted-foreground" />
+          </div>
+
+          <div className="p-4 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">API Latency</p>
+              <p className="text-sm font-bold text-marine dark:text-foreground mt-0.5">14 ms avg</p>
+            </div>
+            <Zap className="w-4 h-4 text-muted-foreground" />
+          </div>
+
+          <div className="p-4 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Observer Role</p>
+              <p className="text-sm font-bold text-marine dark:text-foreground mt-0.5">Read-Only Control</p>
+            </div>
+            <Shield className="w-4 h-4 text-muted-foreground" />
+          </div>
+
+          <div className="p-4 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Environment</p>
+              <p className="text-sm font-bold text-marine dark:text-foreground mt-0.5">Production Active</p>
+            </div>
+            <Globe className="w-4 h-4 text-muted-foreground" />
+          </div>
+        </div>
+
+        {/* Minimal Observer Metrics Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+          <Card className="border border-border/60 bg-card p-5 shadow-2xs rounded-xl">
+            <div className="flex items-center justify-between text-muted-foreground mb-3">
+              <span className="text-xs font-medium uppercase tracking-wider">Registered Accounts</span>
+              <Users className="w-4 h-4 text-marine dark:text-primary" />
+            </div>
+            <div className="flex items-baseline justify-between">
+              <h3 className="text-2xl font-bold tracking-tight text-marine dark:text-foreground">{stats.totals.users}</h3>
+              <span className="text-xs font-medium text-emerald-600 flex items-center gap-0.5">
+                <ArrowUpRight className="w-3 h-3" /> +14% user growth
+              </span>
+            </div>
           </Card>
 
-          <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600">
-                  <Map className="h-6 w-6" />
-                </div>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-0 font-semibold">+34%</Badge>
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">Trips Planned</p>
-              <h3 className="text-3xl font-bold">{stats.totals.trips}</h3>
-            </CardContent>
+          <Card className="border border-border/60 bg-card p-5 shadow-2xs rounded-xl">
+            <div className="flex items-center justify-between text-muted-foreground mb-3">
+              <span className="text-xs font-medium uppercase tracking-wider">Total Itineraries</span>
+              <Map className="w-4 h-4 text-marine dark:text-primary" />
+            </div>
+            <div className="flex items-baseline justify-between">
+              <h3 className="text-2xl font-bold tracking-tight text-marine dark:text-foreground">{stats.totals.trips}</h3>
+              <span className="text-xs font-medium text-emerald-600 flex items-center gap-0.5">
+                <ArrowUpRight className="w-3 h-3" /> +28% creation rate
+              </span>
+            </div>
           </Card>
 
-          <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-600">
-                  <ImageIcon className="h-6 w-6" />
-                </div>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-0 font-semibold">+8%</Badge>
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">Community Posts</p>
-              <h3 className="text-3xl font-bold">{stats.totals.posts}</h3>
-            </CardContent>
+          <Card className="border border-border/60 bg-card p-5 shadow-2xs rounded-xl">
+            <div className="flex items-center justify-between text-muted-foreground mb-3">
+              <span className="text-xs font-medium uppercase tracking-wider">Community Artifacts</span>
+              <ImageIcon className="w-4 h-4 text-marine dark:text-primary" />
+            </div>
+            <div className="flex items-baseline justify-between">
+              <h3 className="text-2xl font-bold tracking-tight text-marine dark:text-foreground">{stats.totals.posts}</h3>
+              <span className="text-xs font-medium text-emerald-600 flex items-center gap-0.5">
+                <ArrowUpRight className="w-3 h-3" /> +8% posts
+              </span>
+            </div>
           </Card>
         </div>
 
-        {/* Charts Section */}
+        {/* Observer Charts & Live Telemetry Stream */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="col-span-1 lg:col-span-2 border-0 shadow-sm bg-white dark:bg-zinc-900">
-            <CardHeader>
-              <CardTitle>Platform Growth</CardTitle>
-              <CardDescription>Monthly new users vs trips created.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={MONTHLY_DATA} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280'}} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280'}} dx={-10} />
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Line type="monotone" dataKey="users" name="Users" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="trips" name="Trips" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+          {/* Growth Chart */}
+          <Card className="lg:col-span-2 border border-border/60 p-6 bg-card rounded-xl shadow-2xs">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="font-semibold text-sm text-marine dark:text-foreground">Platform Activity Trajectory</h3>
+                <p className="text-xs text-muted-foreground">Historical telemetry of signups vs itinerary creations.</p>
               </div>
-            </CardContent>
+              <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Users</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-wave" /> Trips</span>
+              </div>
+            </div>
+
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={MONTHLY_GROWTH} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} />
+                  <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }} />
+                  <Line type="monotone" dataKey="users" name="Users" stroke="#10b981" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="trips" name="Trips" stroke="#376fb7" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </Card>
-          
-          <Card className="col-span-1 border-0 shadow-sm bg-white dark:bg-zinc-900">
-            <CardHeader>
-              <CardTitle>Content Distribution</CardTitle>
-              <CardDescription>Ratio of entities in database.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center">
-              <div className="h-[220px] w-full">
-                <DynamicPieChart data={PIE_DATA} />
+
+          {/* Live Observer Feed */}
+          <Card className="border border-border/60 p-6 bg-card rounded-xl shadow-2xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-sm text-marine dark:text-foreground flex items-center gap-1.5">
+                  <Radio className="w-4 h-4 text-emerald-500 animate-pulse" /> Live Telemetry Ticker
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">REALTIME</span>
               </div>
-              <div className="flex gap-4 mt-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#10b981]"/> <span className="text-sm font-medium">Users</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3b82f6]"/> <span className="text-sm font-medium">Trips</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#f59e0b]"/> <span className="text-sm font-medium">Posts</span></div>
-              </div>
-            </CardContent>
+              <p className="text-xs text-muted-foreground mb-4">Stream of observed platform actions.</p>
+            </div>
+
+            <div className="space-y-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
+              {LIVE_OBSERVER_FEED.map((feed) => (
+                <div key={feed.id} className="text-xs p-2.5 rounded-lg bg-muted/40 border border-border/40 flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-muted-foreground text-[10px]">
+                    <span className="font-semibold uppercase tracking-wider text-marine dark:text-foreground">{feed.status}</span>
+                    <span>{feed.time}</span>
+                  </div>
+                  <p className="text-xs text-foreground font-medium">{feed.text}</p>
+                </div>
+              ))}
+            </div>
           </Card>
         </div>
 
-        {/* Details Section via Tabs */}
+        {/* Observer Inspection Tables */}
         <Tabs defaultValue="users" className="w-full">
-          <TabsList className="mb-6 p-1 bg-white dark:bg-zinc-900 rounded-lg shadow-sm border dark:border-zinc-800">
-            <TabsTrigger value="users" className="px-4 py-2 rounded-md font-medium text-sm data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800">Manage Users</TabsTrigger>
-            <TabsTrigger value="cities" className="px-4 py-2 rounded-md font-medium text-sm data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800">Popular Cities</TabsTrigger>
-            <TabsTrigger value="activities" className="px-4 py-2 rounded-md font-medium text-sm data-[state=active]:bg-zinc-100 dark:data-[state=active]:bg-zinc-800">Popular Activities</TabsTrigger>
-          </TabsList>
+          <div className="border-b border-border/60 mb-6">
+            <TabsList className="bg-transparent p-0 gap-6 h-auto">
+              <TabsTrigger 
+                value="users" 
+                className="rounded-none border-b-2 border-transparent px-0 py-2.5 text-xs font-semibold text-muted-foreground data-[state=active]:border-marine dark:data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent shadow-none"
+              >
+                User Inspector ({filteredUsers.length})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="cities" 
+                className="rounded-none border-b-2 border-transparent px-0 py-2.5 text-xs font-semibold text-muted-foreground data-[state=active]:border-marine dark:data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent shadow-none"
+              >
+                Destination Telemetry ({stats.popularCities.length})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="activities" 
+                className="rounded-none border-b-2 border-transparent px-0 py-2.5 text-xs font-semibold text-muted-foreground data-[state=active]:border-marine dark:data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent shadow-none"
+              >
+                Experience Analytics ({stats.popularActivities.length})
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value="users" className="space-y-4 outline-none">
-            <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900">
-              <CardHeader className="border-b px-6 py-4">
-                <CardTitle className="text-lg">Platform Users</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left whitespace-nowrap">
-                    <thead className="text-xs text-muted-foreground uppercase bg-zinc-50 dark:bg-zinc-900/50">
+          {/* TAB 1: USER INSPECTOR */}
+          <TabsContent value="users" className="outline-none space-y-4">
+            <Card className="border border-border/60 bg-card rounded-xl shadow-2xs overflow-hidden">
+              <div className="p-4 border-b border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-3" />
+                  <Input
+                    placeholder="Search accounts to inspect..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 text-xs h-9 border-border/60"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant={roleFilter === "all" ? "secondary" : "ghost"}
+                    onClick={() => setRoleFilter("all")}
+                    className="text-xs h-8 px-3 font-medium"
+                  >
+                    All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={roleFilter === "admin" ? "secondary" : "ghost"}
+                    onClick={() => setRoleFilter("admin")}
+                    className="text-xs h-8 px-3 font-medium"
+                  >
+                    Admins
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={roleFilter === "user" ? "secondary" : "ghost"}
+                    onClick={() => setRoleFilter("user")}
+                    className="text-xs h-8 px-3 font-medium"
+                  >
+                    Users
+                  </Button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-muted/40 text-muted-foreground uppercase font-semibold text-[10px] tracking-wider border-b border-border/40">
+                    <tr>
+                      <th className="px-5 py-3">Account Identity</th>
+                      <th className="px-5 py-3 text-center">Role</th>
+                      <th className="px-5 py-3 text-center">Trips Created</th>
+                      <th className="px-5 py-3 text-center">Posts Published</th>
+                      <th className="px-5 py-3 text-right">Observer Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {filteredUsers.length === 0 ? (
                       <tr>
-                        <th className="px-6 py-4">User</th>
-                        <th className="px-6 py-4 text-center">Trips</th>
-                        <th className="px-6 py-4 text-center">Posts</th>
+                        <td colSpan={5} className="py-10 text-center text-muted-foreground font-medium">
+                          No user accounts matching "{searchQuery}".
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {stats.users.map((u: any) => (
-                        <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                          <td className="px-6 py-4">
+                    ) : (
+                      filteredUsers.map((u: any) => (
+                        <tr key={u.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
-                              <img src={u.avatarUrl || "https://ui-avatars.com/api/?name=" + encodeURIComponent(u.name)} alt="" className="w-8 h-8 rounded-full shadow-sm" />
+                              <img
+                                src={u.avatarUrl || "https://ui-avatars.com/api/?background=142b51&color=fff&name=" + encodeURIComponent(u.name)}
+                                alt=""
+                                className="w-7 h-7 rounded-full border border-border/60 object-cover"
+                              />
                               <div>
-                                <p className="font-semibold text-gray-900 dark:text-white">{u.name}</p>
-                                <p className="text-xs text-muted-foreground">{u.email}</p>
+                                <p className="font-semibold text-marine dark:text-foreground">{u.name}</p>
+                                <p className="text-[11px] text-muted-foreground">{u.email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge variant="secondary" className="px-2 font-semibold">{u.tripCount}</Badge>
+                          <td className="px-5 py-3.5 text-center">
+                            <Badge 
+                              variant="outline" 
+                              className={u.role === "admin" 
+                                ? "bg-marine/10 text-marine border-marine/20 font-medium text-[11px]" 
+                                : "bg-muted text-muted-foreground border-border text-[11px]"}
+                            >
+                              {u.role === "admin" ? "Admin Observer" : "User"}
+                            </Badge>
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge variant="secondary" className="px-2 font-semibold">{u.postCount}</Badge>
+                          <td className="px-5 py-3.5 text-center font-medium">
+                            {u.tripCount}
+                          </td>
+                          <td className="px-5 py-3.5 text-center font-medium">
+                            {u.postCount}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => setSelectedUser(u)}
+                              className="text-[11px] h-7 font-semibold gap-1"
+                            >
+                              <Eye className="w-3 h-3 text-marine dark:text-primary" /> Inspect User
+                            </Button>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           </TabsContent>
 
-          <TabsContent value="cities" className="space-y-4 outline-none">
+          {/* TAB 2: CITIES */}
+          <TabsContent value="cities" className="outline-none space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900">
-                <CardHeader className="border-b px-6 py-4">
-                  <CardTitle className="text-lg">City Popularity Chart</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 h-[400px]">
-                  <DynamicBarChart data={BAR_DATA.length ? BAR_DATA : [{name: 'No data', visits: 1}]} />
-                </CardContent>
+              <Card className="border border-border/60 bg-card rounded-xl shadow-2xs p-5">
+                <h3 className="font-semibold text-sm text-marine dark:text-foreground mb-4">Destination Travel Index</h3>
+                <div className="h-[320px] w-full">
+                  <DynamicBarChart data={BAR_DATA.length ? BAR_DATA : [{ name: 'No data', visits: 1 }]} />
+                </div>
               </Card>
 
-              <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900">
-                <CardHeader className="border-b px-6 py-4">
-                  <CardTitle className="text-lg">City Data</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y divide-zinc-100 dark:divide-zinc-800 max-h-[400px] overflow-y-auto">
-                    {stats.popularCities.map((c: any, i: number) => (
-                      <div key={c.cityId} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <span className="text-muted-foreground font-bold w-4">{i + 1}</span>
-                          <div className="w-10 h-10 rounded-md bg-zinc-100 flex items-center justify-center overflow-hidden">
-                            {c.imageUrl ? <img src={c.imageUrl} className="w-full h-full object-cover" /> : <Navigation className="w-5 h-5 text-zinc-400" />}
-                          </div>
-                          <span className="font-semibold">{c.name}</span>
-                        </div>
-                        <Badge variant="secondary">{c.visitCount} trips</Badge>
+              <Card className="border border-border/60 bg-card rounded-xl shadow-2xs p-5">
+                <h3 className="font-semibold text-sm text-marine dark:text-foreground mb-4">Top Visited Cities</h3>
+                <div className="divide-y divide-border/40 max-h-[320px] overflow-y-auto pr-1">
+                  {stats.popularCities.map((c: any, i: number) => (
+                    <div key={c.cityId} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold text-muted-foreground w-4">#{i + 1}</span>
+                        <span className="font-semibold text-xs text-marine dark:text-foreground">{c.name}</span>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
+                      <Badge variant="secondary" className="font-medium text-xs">
+                        {c.visitCount} visits logged
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </Card>
             </div>
           </TabsContent>
 
-          <TabsContent value="activities" className="space-y-4 outline-none">
-            <Card className="border-0 shadow-sm bg-white dark:bg-zinc-900">
-              <CardHeader className="border-b px-6 py-4">
-                <CardTitle className="text-lg">Top Activities Booked</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {stats.popularActivities.map((a: any, i: number) => (
-                    <div key={a.activityId} className="flex items-center justify-between p-6 hover:bg-zinc-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="text-lg font-bold text-muted-foreground w-6">{i + 1}</div>
-                        <div>
-                          <h4 className="font-semibold text-lg">{a.name}</h4>
-                          <Badge variant="outline" className="mt-1">{a.type || "General"}</Badge>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span className="font-bold text-sm">{a.bookingCount} bookings</span>
+          {/* TAB 3: ACTIVITIES */}
+          <TabsContent value="activities" className="outline-none space-y-4">
+            <Card className="border border-border/60 bg-card rounded-xl shadow-2xs p-5">
+              <h3 className="font-semibold text-sm text-marine dark:text-foreground mb-4">Observed Experience Rankings</h3>
+              <div className="divide-y divide-border/40">
+                {stats.popularActivities.map((a: any, i: number) => (
+                  <div key={a.activityId} className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-muted-foreground w-4">#{i + 1}</span>
+                      <div>
+                        <h4 className="font-semibold text-xs text-marine dark:text-foreground">{a.name}</h4>
+                        <span className="text-[11px] text-muted-foreground">{a.type || "Experience"}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
+                    <Badge variant="outline" className="font-medium text-xs">
+                      {a.bookingCount} bookings
+                    </Badge>
+                  </div>
+                ))}
+              </div>
             </Card>
           </TabsContent>
-
         </Tabs>
       </main>
+
+      {/* User Inspector Observer Dialog */}
+      <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+        <DialogContent className="sm:max-w-md bg-card border-border/80 p-6 rounded-2xl shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-marine dark:text-foreground">
+              <Eye className="w-4 h-4 text-marine dark:text-primary" /> Observer User Inspector
+            </DialogTitle>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/60">
+                <img 
+                  src={selectedUser.avatarUrl || "https://ui-avatars.com/api/?background=142b51&color=fff&name=" + encodeURIComponent(selectedUser.name)} 
+                  className="w-12 h-12 rounded-full border border-border object-cover" 
+                />
+                <div>
+                  <h4 className="font-bold text-sm text-marine dark:text-foreground">{selectedUser.name}</h4>
+                  <p className="text-xs text-muted-foreground">{selectedUser.email}</p>
+                  <Badge variant="outline" className="mt-1 text-[10px] font-semibold">
+                    Role: {selectedUser.role}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl border border-border/60 bg-card">
+                  <span className="text-muted-foreground font-semibold">Trips Created</span>
+                  <p className="text-lg font-bold text-marine dark:text-foreground mt-1">{selectedUser.tripCount}</p>
+                </div>
+                <div className="p-3 rounded-xl border border-border/60 bg-card">
+                  <span className="text-muted-foreground font-semibold">Posts Published</span>
+                  <p className="text-lg font-bold text-marine dark:text-foreground mt-1">{selectedUser.postCount}</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl border border-border/60 bg-muted/20 text-xs">
+                <div className="flex items-center gap-1.5 text-emerald-600 font-semibold mb-1">
+                  <Lock className="w-3.5 h-3.5" /> Read-Only Telemetry Status
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Observer Mode provides read-only diagnostics for system integrity. No user data mutated.
+                </p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

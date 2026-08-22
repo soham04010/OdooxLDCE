@@ -14,6 +14,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 
+import { toast } from "sonner";
 import { ImageCarousel } from "@/components/community/ImageCarousel";
 import { PostModal } from "@/components/community/PostModal";
 import { Navbar } from "@/components/layout/Navbar";
@@ -23,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRange } from "@/lib/sample-data";
 import { cn } from "@/lib/utils";
+import { getUserPreferences, saveUserPreferences, PERSONA_LABELS, TravelPersona } from "@/lib/personalization";
 
 type Profile = {
   id?: string;
@@ -93,6 +95,20 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+
+  const [prefs, setPrefs] = useState(getUserPreferences());
+
+  const handlePersonaChange = (persona: TravelPersona) => {
+    const updated = saveUserPreferences({ persona });
+    setPrefs(updated);
+    toast.success(`Travel persona updated to ${PERSONA_LABELS[persona].label}!`);
+  };
+
+  const handleCurrencyChange = (currency: string) => {
+    const updated = saveUserPreferences({ currency });
+    setPrefs(updated);
+    toast.success(`Preferred currency updated to ${currency}!`);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -242,7 +258,7 @@ export default function ProfilePage() {
         const uploadError = (await uploadResponse.json()) as {
           error?: { message?: string };
         };
-        alert(
+        toast.error(
           `Cloudinary Error: ${uploadError.error?.message || "Check console"}`
         );
         return;
@@ -264,9 +280,10 @@ export default function ProfilePage() {
       );
 
       if (!updateResponse.ok) {
-        alert("Failed to update backend");
+        toast.error("Failed to update backend");
         throw new Error(`Backend update failed: ${updateResponse.status}`);
       }
+      toast.success("Profile photo updated!");
 
       const updateData = (await updateResponse.json()) as {
         user: Partial<Profile> & Pick<Profile, "name" | "email">;
@@ -510,6 +527,92 @@ export default function ProfilePage() {
                 )}
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="mt-8">
+          <SectionHeading>Personal Travel Preferences</SectionHeading>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Travel Persona Selection */}
+            <div className="rounded-xl border border-border/80 bg-card p-6 shadow-2xs">
+              <h3 className="font-bold text-base text-marine dark:text-foreground mb-1">
+                Travel Persona
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                Personalizes destination suggestions, activity recommendations, and budget targets.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {(Object.keys(PERSONA_LABELS) as TravelPersona[]).map((key) => {
+                  const p = PERSONA_LABELS[key];
+                  const isSelected = prefs.persona === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handlePersonaChange(key)}
+                      className={`p-3 rounded-lg border text-left transition-all ${
+                        isSelected
+                          ? "border-wave bg-wave/10 ring-1 ring-wave"
+                          : "border-border/60 hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="text-lg mb-1">{p.icon}</div>
+                      <div className="font-semibold text-xs text-marine dark:text-foreground">{p.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{p.tag}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Currency & Pace Settings */}
+            <div className="rounded-xl border border-border/80 bg-card p-6 shadow-2xs flex flex-col justify-between">
+              <div>
+                <h3 className="font-bold text-base text-marine dark:text-foreground mb-1">
+                  Preferred Currency & Travel Pace
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Set default financial currency and preferred itinerary pacing.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-2">Preferred Currency</label>
+                    <div className="flex gap-2">
+                      {["$", "€", "₹", "£"].map((curr) => (
+                        <button
+                          key={curr}
+                          type="button"
+                          onClick={() => handleCurrencyChange(curr)}
+                          className={`w-11 h-9 rounded-md border font-bold text-sm transition-all ${
+                            prefs.currency === curr
+                              ? "bg-marine text-white border-marine shadow-2xs"
+                              : "bg-muted/40 border-border/60 hover:bg-muted"
+                          }`}
+                        >
+                          {curr}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-2">Active Travel Style</label>
+                    <div className="p-3 rounded-lg bg-muted/40 border border-border/60 flex items-center gap-3">
+                      <span className="text-2xl">{PERSONA_LABELS[prefs.persona]?.icon || "✈️"}</span>
+                      <div>
+                        <p className="text-xs font-bold text-marine dark:text-foreground">
+                          {PERSONA_LABELS[prefs.persona]?.label} ({prefs.currency})
+                        </p>
+                        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                          {PERSONA_LABELS[prefs.persona]?.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
