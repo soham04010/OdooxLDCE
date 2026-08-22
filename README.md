@@ -339,6 +339,3 @@ Before deploying or publishing a production version:
 
 Questions about the hackathon project can be sent to [OdooEvent5011@gmail.com](mailto:OdooEvent5011@gmail.com).
 
-## License
-
-A repository-wide license has not yet been declared. Add a `LICENSE` file before distributing or reusing the project outside the hackathon team.
