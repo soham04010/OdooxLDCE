@@ -300,59 +300,79 @@ export default function InboxPage() {
 
         {/* TAB 2: TRIP GROUP CHAT */}
         {activeTab === "chat" && (
-          <div className="flex justify-center items-center py-6">
-            {/* Mobile Phone Mockup Container */}
-            <div className="w-[360px] h-[580px] bg-card border-4 border-marine/20 dark:border-border rounded-[36px] shadow-2xl flex flex-col overflow-hidden relative">
-              {/* Phone Speaker Notch */}
-              <div className="w-28 h-4 bg-marine/10 dark:bg-muted mx-auto rounded-b-xl flex items-center justify-center shrink-0">
-                <div className="w-8 h-1 bg-marine/30 rounded-full" />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+            {/* Left Sidebar: Select Trip */}
+            <Card className="border border-border/80 p-4 bg-card rounded-2xl flex flex-col justify-between overflow-hidden">
+              <div>
+                <h3 className="font-bold text-sm text-marine dark:text-foreground mb-3 px-2 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-wave" /> Select Trip Group
+                </h3>
 
-              {/* Phone Header */}
-              <div className="p-3 border-b border-border/60 bg-marine text-white flex items-center justify-between">
-                <div className="truncate">
-                  <h4 className="font-bold text-xs truncate">
+                {trips.length === 0 ? (
+                  <p className="text-xs text-muted-foreground p-4 text-center">No active trips found.</p>
+                ) : (
+                  <div className="space-y-1 overflow-y-auto max-h-[500px] pr-1">
+                    {trips.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => setSelectedTripId(t.id)}
+                        className={`w-full text-left p-3 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between ${
+                          selectedTripId === t.id
+                            ? "bg-marine text-white"
+                            : "hover:bg-muted/60 text-foreground"
+                        }`}
+                      >
+                        <div className="truncate">
+                          <p className="truncate font-bold">{t.name}</p>
+                          <p className={`text-[10px] truncate mt-0.5 ${selectedTripId === t.id ? "text-white/80" : "text-muted-foreground"}`}>
+                            {t.startDate ? `${new Date(t.startDate).toLocaleDateString()}` : "Upcoming Trip"}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Right Chat Panel */}
+            <Card className="md:col-span-2 border border-border/80 bg-card rounded-2xl flex flex-col h-full overflow-hidden">
+              {/* Chat Header */}
+              <div className="p-4 border-b border-border/60 bg-muted/20 flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-base text-marine dark:text-foreground">
                     {trips.find((t) => t.id === selectedTripId)?.name || "Group Chat"}
                   </h4>
-                  <p className="text-[10px] text-emerald-300 font-medium">● Group Live Chat</p>
+                  <p className="text-xs text-muted-foreground">Live chat with your trip members</p>
                 </div>
-
-                {trips.length > 1 && (
-                  <select
-                    value={selectedTripId || ""}
-                    onChange={(e) => setSelectedTripId(e.target.value)}
-                    className="bg-marine/80 text-white font-bold text-[11px] border border-white/20 rounded px-1.5 py-0.5"
-                  >
-                    {trips.map((t) => (
-                      <option key={t.id} value={t.id} className="bg-zinc-900 text-white">
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
               </div>
 
               {/* Chat Message List */}
-              <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-muted/20">
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 {chatLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-8 w-3/4 rounded-xl" />
-                    <Skeleton className="h-8 w-1/2 ml-auto rounded-xl" />
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-3/4 rounded-xl" />
+                    <Skeleton className="h-10 w-1/2 ml-auto rounded-xl" />
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-xs py-12 text-center">
-                    <MessageSquare className="w-8 h-8 mb-2 opacity-30 text-wave" />
-                    No messages yet in this group.
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-xs py-12">
+                    <MessageSquare className="w-8 h-8 mb-2 opacity-40" />
+                    No messages yet in this group. Start the conversation!
                   </div>
                 ) : (
                   messages.map((m) => (
-                    <div key={m.id} className="flex flex-col space-y-0.5">
-                      <span className="text-[9px] font-semibold text-muted-foreground px-1">{m.senderName}</span>
-                      <div className="bg-card border border-border/70 p-2.5 rounded-2xl rounded-tl-xs shadow-2xs max-w-[85%] text-xs">
-                        <p className="text-foreground leading-relaxed">{m.content}</p>
-                        <span className="text-[9px] text-muted-foreground mt-0.5 block text-right">
-                          {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                    <div key={m.id} className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-wave text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                        {m.senderName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="bg-muted/50 p-3 rounded-2xl rounded-tl-none border border-border/60 max-w-[80%]">
+                        <div className="flex items-center justify-between gap-4 mb-1">
+                          <span className="font-bold text-xs text-marine dark:text-foreground">{m.senderName}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-foreground">{m.content}</p>
                       </div>
                     </div>
                   ))
@@ -360,18 +380,18 @@ export default function InboxPage() {
               </div>
 
               {/* Chat Input Box */}
-              <form onSubmit={handleSendMessage} className="p-2.5 border-t border-border/60 bg-card flex items-center gap-2">
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-border/60 bg-background flex items-center gap-2">
                 <Input
                   value={msgInput}
                   onChange={(e) => setMsgInput(e.target.value)}
-                  placeholder="Type message..."
-                  className="text-xs h-9 rounded-full border-border/80"
+                  placeholder="Type a message to your group..."
+                  className="text-xs h-10 border-border/80"
                 />
-                <Button type="submit" size="icon" disabled={sending || !msgInput.trim()} className="h-9 w-9 rounded-full bg-marine text-white shrink-0">
-                  <Send className="w-4 h-4" />
+                <Button type="submit" size="sm" disabled={sending || !msgInput.trim()} className="h-10 px-4 gap-1.5 font-semibold">
+                  <Send className="w-4 h-4" /> Send
                 </Button>
               </form>
-            </div>
+            </Card>
           </div>
         )}
       </main>

@@ -343,8 +343,57 @@ app.post('/api/trips/:tripId/stops/:stopId', requireAuth, async (req: any, res: 
 });
 
 app.get('/api/trips', requireAuth, async (req: any, res: any) => {
-  const userTrips = await db.select().from(trips).where(eq(trips.userId, req.user.userId)).orderBy(desc(trips.startDate));
-  res.json(userTrips);
+  try {
+    const userObj = await db.select().from(users).where(eq(users.id, req.user.userId));
+    const userEmail = userObj[0]?.email || '';
+    const userName = userObj[0]?.name || '';
+
+    // 1. Own trips
+    const ownTrips = await db.select().from(trips).where(eq(trips.userId, req.user.userId));
+
+    // 2. Member trips
+    let memberTripIds: string[] = [];
+    try {
+      const memberRecords = await db
+        .select({ tripId: tripMembers.tripId })
+        .from(tripMembers)
+        .where(
+          or(
+            eq(tripMembers.email, userEmail),
+            eq(tripMembers.name, userName),
+            eq(tripMembers.email, req.user.userId)
+          )
+        );
+      memberTripIds = memberRecords.map(m => m.tripId);
+    } catch {
+      memberTripIds = [];
+    }
+
+    // 3. Accepted invitation trips
+    let invTripIds: string[] = [];
+    try {
+      const invRecords = await db
+        .select({ tripId: invitations.tripId })
+        .from(invitations)
+        .where(
+          and(
+            or(eq(invitations.receiverEmail, userEmail), eq(invitations.receiverEmail, req.user.userId)),
+            eq(invitations.status, 'accepted')
+          )
+        );
+      invTripIds = invRecords.map(i => i.tripId);
+    } catch {
+      invTripIds = [];
+    }
+
+    const allTripIds = Array.from(new Set([...ownTrips.map(t => t.id), ...memberTripIds, ...invTripIds]));
+    if (allTripIds.length === 0) return res.json([]);
+
+    const allTrips = await db.select().from(trips).where(inArray(trips.id, allTripIds)).orderBy(desc(trips.startDate));
+    res.json(allTrips);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/public/trips/:slug', async (req: any, res: any) => {
