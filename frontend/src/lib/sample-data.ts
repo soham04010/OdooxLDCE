@@ -170,3 +170,39 @@ export const heroSlides: Slide[] = [
     region: "Amritsar",
   },
 ];
+
+export type FeaturedPlace = {
+  id: string;
+  name: string;
+  region: string;
+  imageUrl: string;
+  description: string;
+};
+
+/** The three places surfaced on the home page. */
+export const featuredPlaces: FeaturedPlace[] = [
+  {
+    id: "leh",
+    name: "Leh",
+    region: "Ladakh",
+    imageUrl: "/cities/leh.jpg",
+    description:
+      "High-desert monasteries, thin air and the road to Pangong. Best between June and September, when the passes are open.",
+  },
+  {
+    id: "srinagar",
+    name: "Srinagar",
+    region: "Kashmir",
+    imageUrl: "/cities/srinagar.jpg",
+    description:
+      "Houseboats on Dal Lake and the Mughal gardens above it. Come in April for the tulip garden, the largest in Asia.",
+  },
+  {
+    id: "agra",
+    name: "Agra",
+    region: "Uttar Pradesh",
+    imageUrl: "/cities/agra.jpg",
+    description:
+      "The Taj at sunrise, before the crowds and the heat. Two days is enough to add Fatehpur Sikri and the fort.",
+  },
+];
