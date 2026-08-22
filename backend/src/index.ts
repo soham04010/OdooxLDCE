@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments } from './db/schema';
+import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments, tripMembers } from './db/schema';
 import { eq, ilike, and, or, desc, asc, sql, inArray } from 'drizzle-orm';
 
 dotenv.config();
@@ -382,26 +382,91 @@ app.get('/api/community/trips', async (req: any, res: any) => {
   res.json(publicTrips);
 });
 
-app.get('/api/trips/:id', requireAuth, async (req: any, res: any) => {
-  const tripData = await db.select().from(trips).where(eq(trips.id, req.params.id));
-  if (!tripData.length) return res.status(404).json({ error: 'Trip not found' });
-  
-  // Fetch stops with cities
-  const stops = await db.select({
-    stop: tripStops,
-    city: cities
-  }).from(tripStops).leftJoin(cities, eq(tripStops.cityId, cities.id)).where(eq(tripStops.tripId, req.params.id)).orderBy(asc(tripStops.orderIndex));
-  
-  // For each stop, fetch activities (in a real app, do one query and group, but this is fine for hackathon)
-  const stopsWithActivities = await Promise.all(stops.map(async (s: any) => {
-    const stopActivities = await db.select({
-      item: tripActivities,
-      activity: activities
-    }).from(tripActivities).leftJoin(activities, eq(tripActivities.activityId, activities.id)).where(eq(tripActivities.stopId, s.stop.id)).orderBy(asc(tripActivities.dayNumber));
-    return { ...s, activities: stopActivities };
-  }));
+// Auto-migrate trip_members table and paid_by_member_name column
+db.execute(sql`
+  CREATE TABLE IF NOT EXISTS trip_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(160),
+    role VARCHAR(20) DEFAULT 'member',
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+  ALTER TABLE trip_activities ADD COLUMN IF NOT EXISTS paid_by_member_name VARCHAR(120);
+`).catch((err) => console.log('Auto migration note:', err.message));
 
-  res.json({ trip: tripData[0], stops: stopsWithActivities });
+app.get('/api/trips/:id', requireAuth, async (req: any, res: any) => {
+  try {
+    const tripData = await db.select().from(trips).where(eq(trips.id, req.params.id));
+    if (!tripData.length) return res.status(404).json({ error: 'Trip not found' });
+    
+    // Fetch stops with cities
+    const stops = await db.select({
+      stop: tripStops,
+      city: cities
+    }).from(tripStops).leftJoin(cities, eq(tripStops.cityId, cities.id)).where(eq(tripStops.tripId, req.params.id)).orderBy(asc(tripStops.orderIndex));
+    
+    // For each stop, fetch activities
+    const stopsWithActivities = await Promise.all(stops.map(async (s: any) => {
+      const stopActivities = await db.select({
+        item: tripActivities,
+        activity: activities
+      }).from(tripActivities).leftJoin(activities, eq(tripActivities.activityId, activities.id)).where(eq(tripActivities.stopId, s.stop.id)).orderBy(asc(tripActivities.dayNumber));
+      return { ...s, activities: stopActivities };
+    }));
+
+    // Fetch members safely
+    let members: any[] = [];
+    try {
+      members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, req.params.id));
+    } catch (e) {
+      members = [];
+    }
+
+    res.json({ trip: tripData[0], stops: stopsWithActivities, members });
+  } catch (err: any) {
+    console.error("GET trip error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- TRIP MEMBERS & SPLIT ---
+app.post('/api/trips/:id/members', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, email, role } = req.body;
+    if (!name) return res.status(400).json({ error: 'Member name required' });
+    const newMember = await db.insert(tripMembers).values({
+      tripId: req.params.id,
+      name,
+      email: email || null,
+      role: role || 'member'
+    }).returning();
+    res.status(201).json(newMember[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/trips/:id/members/:memberId', requireAuth, async (req: any, res: any) => {
+  try {
+    await db.delete(tripMembers).where(and(eq(tripMembers.id, req.params.memberId), eq(tripMembers.tripId, req.params.id)));
+    res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/stops/:stopId/activities', requireAuth, async (req: any, res: any) => {
+  try {
+    const { activityId, dayNumber, startTime, category, costOverride, notes, paidByMemberName } = req.body;
+    const newAct = await db.insert(tripActivities).values({
+      stopId: req.params.stopId,
+      activityId,
+      dayNumber: dayNumber || 1,
+      startTime,
+      category: category || 'activity',
+      costOverride,
+      notes,
+      paidByMemberName: paidByMemberName || null
+    }).returning();
+    res.status(201).json(newAct[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 // --- STOPS & ACTIVITIES ---

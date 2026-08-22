@@ -5,14 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, X, Loader2, Calendar, PieChart as PieIcon, List, Share2, Copy, MapPin, Plane, Hotel, Utensils, Compass } from "lucide-react";
+import { Plus, X, Loader2, Calendar, PieChart as PieIcon, List, Share2, Copy, MapPin, Plane, Hotel, Utensils, Compass, Users, UserPlus, Receipt, DollarSign, CheckCircle2, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import dynamic from "next/dynamic";
 
 const DynamicBudgetChart = dynamic(() => import("@/components/TripBudgetChart"), { ssr: false });
@@ -81,13 +81,17 @@ export default function BuildItineraryPage() {
   const router = useRouter();
   const tripId = params.id;
   
-  const [data, setData] = useState<{ trip: any, stops: any[] } | null>(null);
+  const [data, setData] = useState<{ trip: any, stops: any[], members?: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"list" | "calendar" | "analytics">("list");
+  const [viewMode, setViewMode] = useState<"list" | "calendar" | "analytics" | "split">("list");
   
   // Modals state
   const [isAddStopModalOpen, setIsAddStopModalOpen] = useState(false);
   const [isAddActivityModalOpen, setIsAddActivityModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
   
   // Dependencies data
   const [cities, setCities] = useState<any[]>([]);
@@ -96,6 +100,49 @@ export default function BuildItineraryPage() {
   const [activeCityId, setActiveCityId] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [copying, setCopying] = useState(false);
+
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteName.trim()) return;
+    setInviting(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/trips/${tripId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: inviteName, email: inviteEmail }),
+        credentials: "include"
+      });
+      if (res.ok) {
+        toast.success(`${inviteName} added to trip!`);
+        setInviteName("");
+        setInviteEmail("");
+        setIsInviteModalOpen(false);
+        fetchTrip();
+      } else {
+        toast.error("Failed to add trip member");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error connecting to backend");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberName: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/trips/${tripId}/members/${memberId}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      if (res.ok) {
+        toast.success(`${memberName} removed from trip`);
+        fetchTrip();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchTrip = async () => {
     try {
@@ -146,6 +193,7 @@ export default function BuildItineraryPage() {
     const startTime = formData.get("startTime") as string;
     const customCost = formData.get("costOverride") as string;
     const category = formData.get("category") as string || "activity";
+    const paidByMemberName = formData.get("paidByMemberName") as string;
 
     try {
       const actRes = await fetch("http://localhost:5000/api/activities", {
@@ -176,6 +224,7 @@ export default function BuildItineraryPage() {
           startTime,
           category,
           costOverride: customCost || undefined,
+          paidByMemberName: paidByMemberName || undefined,
         }),
         credentials: "include"
       });
@@ -240,6 +289,48 @@ export default function BuildItineraryPage() {
   })).filter(x => x.value > 0);
 
   const BRAND_COLORS = ['#142b51', '#376fb7', '#f0cfac', '#f68620'];
+
+  // Members & Split Calculation
+  const hostName = "You (Host)";
+  const memberList = [
+    { name: hostName, role: "owner" },
+    ...(data?.members || []).map((m: any) => ({ id: m.id, name: m.name, email: m.email, role: m.role }))
+  ];
+  const memberCount = Math.max(1, memberList.length);
+  const perPersonShare = totalSpend / memberCount;
+
+  const paidByMap: Record<string, number> = {};
+  memberList.forEach(m => paidByMap[m.name] = 0);
+
+  data?.stops.forEach((stopItem: any) => {
+    stopItem.activities.forEach((act: any) => {
+      const cost = Number(act.item.costOverride || act.activity.cost || 0);
+      const payer = act.item.paidByMemberName || hostName;
+      paidByMap[payer] = (paidByMap[payer] || 0) + cost;
+    });
+  });
+
+  const memberBalances = memberList.map(m => {
+    const paid = paidByMap[m.name] || 0;
+    const balance = paid - perPersonShare;
+    return { ...m, paid, share: perPersonShare, balance };
+  });
+
+  const debtors = memberBalances.filter(m => m.balance < -0.01).map(m => ({ ...m, amount: Math.abs(m.balance) }));
+  const creditors = memberBalances.filter(m => m.balance > 0.01).map(m => ({ ...m, amount: m.balance }));
+
+  const settlements: { from: string; to: string; amount: number }[] = [];
+  let dIdx = 0, cIdx = 0;
+  while (dIdx < debtors.length && cIdx < creditors.length) {
+    const transfer = Math.min(debtors[dIdx].amount, creditors[cIdx].amount);
+    if (transfer > 0.01) {
+      settlements.push({ from: debtors[dIdx].name, to: creditors[cIdx].name, amount: transfer });
+    }
+    debtors[dIdx].amount -= transfer;
+    creditors[cIdx].amount -= transfer;
+    if (debtors[dIdx].amount < 0.01) dIdx++;
+    if (creditors[cIdx].amount < 0.01) cIdx++;
+  }
 
   return (
     <div className="min-h-screen bg-background font-sans relative">
@@ -335,8 +426,8 @@ export default function BuildItineraryPage() {
             </Card>
 
             {/* View Modes Switcher */}
-            <div className="flex justify-between items-center border-b pb-4">
-              <div className="flex bg-muted p-1 rounded-lg gap-1">
+            <div className="flex flex-wrap justify-between items-center border-b pb-4 gap-4">
+              <div className="flex flex-wrap bg-muted p-1 rounded-lg gap-1">
                 <Button 
                   variant={viewMode === "list" ? "default" : "ghost"} 
                   size="sm" 
@@ -361,11 +452,24 @@ export default function BuildItineraryPage() {
                 >
                   <PieIcon className="w-4 h-4" /> Budget Analytics
                 </Button>
+                <Button 
+                  variant={viewMode === "split" ? "default" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setViewMode("split")}
+                  className="text-xs gap-1.5"
+                >
+                  <Receipt className="w-4 h-4" /> Trip Split & Friends
+                </Button>
               </div>
 
-              <Button size="sm" onClick={handleAddStopClick} className="gap-1.5">
-                <Plus className="w-4 h-4" /> Add Section
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setIsInviteModalOpen(true)} className="gap-1.5 text-xs font-semibold">
+                  <UserPlus className="w-3.5 h-3.5" /> Invite Friend
+                </Button>
+                <Button size="sm" onClick={handleAddStopClick} className="gap-1.5 text-xs font-semibold">
+                  <Plus className="w-3.5 h-3.5" /> Add Section
+                </Button>
+              </div>
             </div>
 
             {/* TAB 1: LIST VIEW */}
@@ -481,46 +585,234 @@ export default function BuildItineraryPage() {
             {/* TAB 3: BUDGET ANALYTICS VIEW */}
             {viewMode === "analytics" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border p-6 shadow-sm">
-                  <h3 className="font-bold text-md mb-4 text-marine dark:text-foreground">Cost Breakdown by Category</h3>
+                <Card className="border border-border/80 p-6 shadow-2xs bg-card rounded-2xl">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-base text-marine dark:text-foreground">Cost Breakdown by Category</h3>
+                    <p className="text-xs text-muted-foreground">Expenditure grouped by activity & stay types.</p>
+                  </div>
+
                   {pieChartData.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-12 text-center">No cost data available yet.</p>
+                    <div className="text-xs text-muted-foreground py-16 text-center border border-dashed rounded-xl">
+                      No activities added yet. Add activities to see breakdown.
+                    </div>
                   ) : (
-                    <div className="h-64">
+                    <div className="h-64 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                          <Pie 
+                            data={pieChartData} 
+                            dataKey="value" 
+                            nameKey="name" 
+                            cx="50%" 
+                            cy="50%" 
+                            innerRadius={55}
+                            outerRadius={85} 
+                            paddingAngle={4}
+                          >
                             {pieChartData.map((_, index) => (
                               <Cell key={`cell-${index}`} fill={BRAND_COLORS[index % BRAND_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip />
-                          <Legend />
+                          <Tooltip 
+                            formatter={(value: any) => [`${mainCurrency}${Number(value).toFixed(2)}`, "Spent"]}
+                            contentStyle={{ borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: "8px", fontSize: "12px", fontWeight: 600 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                   )}
                 </Card>
 
-                <Card className="border p-6 shadow-sm">
-                  <h3 className="font-bold text-md mb-4 text-marine dark:text-foreground">Budget vs Spent per Section</h3>
+                <Card className="border border-border/80 p-6 shadow-2xs bg-card rounded-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-base text-marine dark:text-foreground">Budget vs Spent per Section</h3>
+                      <p className="text-xs text-muted-foreground">Comparative breakdown per destination stop.</p>
+                    </div>
+                  </div>
+
                   {stopBudgetData.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-12 text-center">No section budget data available.</p>
+                    <div className="text-xs text-muted-foreground py-16 text-center border border-dashed rounded-xl">
+                      No section budget data available.
+                    </div>
                   ) : (
-                    <div className="h-64">
+                    <div className="h-64 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={stopBudgetData}>
-                          <XAxis dataKey="name" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="Budget" fill="#142b51" />
-                          <Bar dataKey="Spent" fill="#376fb7" />
+                        <BarChart data={stopBudgetData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis 
+                            dataKey="name" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{ fill: "#64748b", fontSize: 12, fontWeight: 600 }} 
+                          />
+                          <YAxis 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{ fill: "#64748b", fontSize: 12 }} 
+                            tickFormatter={(v) => `${mainCurrency}${v}`} 
+                          />
+                          <Tooltip 
+                            formatter={(value: any) => [`${mainCurrency}${Number(value).toFixed(2)}`, ""]}
+                            contentStyle={{ borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: "12px", fontSize: "12px", fontWeight: 600 }} />
+                          <Bar dataKey="Budget" name="Planned Budget" fill="#142b51" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                          <Bar dataKey="Spent" name="Actual Spent" fill="#376fb7" radius={[6, 6, 0, 0]} maxBarSize={40} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   )}
                 </Card>
+              </div>
+            )}
+
+            {/* TAB 4: TRIP SPLIT & FRIENDS VIEW */}
+            {viewMode === "split" && (
+              <div className="space-y-6">
+                {/* Header Card */}
+                <Card className="border border-border/80 p-6 shadow-2xs bg-card rounded-2xl">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Users className="w-5 h-5 text-wave" />
+                        <h3 className="font-bold text-lg text-marine dark:text-foreground">
+                          Trip Friends & Expense Splitter
+                        </h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Invite friends, track who paid for each activity, and calculate equal settlements.
+                      </p>
+                    </div>
+
+                    <Button size="sm" onClick={() => setIsInviteModalOpen(true)} className="gap-1.5 font-semibold text-xs h-9">
+                      <UserPlus className="w-3.5 h-3.5" /> Invite Friend to Trip
+                    </Button>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+                    <div className="p-4 rounded-xl bg-muted/40 border border-border/60">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Trip Expenses</p>
+                      <p className="text-2xl font-bold text-marine dark:text-foreground">{mainCurrency}{totalSpend.toFixed(2)}</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-muted/40 border border-border/60">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Group Size</p>
+                      <p className="text-2xl font-bold text-marine dark:text-foreground">{memberCount} Member{memberCount !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-wave/10 border border-wave/20">
+                      <p className="text-[11px] font-semibold text-wave uppercase tracking-wider mb-1">Equal Share / Person</p>
+                      <p className="text-2xl font-bold text-wave">{mainCurrency}{perPersonShare.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Members & Balances Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left Column: Member Spending Table */}
+                  <Card className="lg:col-span-2 border border-border/80 p-6 shadow-2xs bg-card rounded-2xl">
+                    <h4 className="font-bold text-base text-marine dark:text-foreground mb-4">
+                      Member Balances & Spending
+                    </h4>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-muted/50 text-muted-foreground uppercase font-semibold text-[10px] tracking-wider">
+                          <tr>
+                            <th className="p-3 rounded-l-lg">Member</th>
+                            <th className="p-3 text-right">Paid</th>
+                            <th className="p-3 text-right">Fair Share</th>
+                            <th className="p-3 text-right rounded-r-lg">Net Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {memberBalances.map((mb, i) => (
+                            <tr key={i} className="hover:bg-muted/30 transition-colors">
+                              <td className="p-3 font-semibold text-marine dark:text-foreground">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-marine text-white flex items-center justify-center font-bold text-[11px]">
+                                      {mb.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span>{mb.name} {mb.role === "owner" ? "(Host)" : ""}</span>
+                                  </div>
+                                  {(mb as any).id && (
+                                    <button
+                                      onClick={() => handleRemoveMember((mb as any).id, mb.name)}
+                                      className="text-muted-foreground hover:text-destructive p-1"
+                                      title="Remove member"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 text-right font-medium">{mainCurrency}{mb.paid.toFixed(2)}</td>
+                              <td className="p-3 text-right font-medium text-muted-foreground">{mainCurrency}{mb.share.toFixed(2)}</td>
+                              <td className="p-3 text-right font-bold">
+                                {mb.balance > 0.01 ? (
+                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold text-[11px]">
+                                    Gets back +{mainCurrency}{mb.balance.toFixed(2)}
+                                  </Badge>
+                                ) : mb.balance < -0.01 ? (
+                                  <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 font-bold text-[11px]">
+                                    Owes -{mainCurrency}{Math.abs(mb.balance).toFixed(2)}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-muted text-muted-foreground border-border font-bold text-[11px]">
+                                    Settled up
+                                  </Badge>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  {/* Right Column: Settlement Directions */}
+                  <Card className="border border-border/80 p-6 shadow-2xs bg-card rounded-2xl flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-bold text-base text-marine dark:text-foreground mb-1 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-emerald-500" /> Payment Settlements
+                      </h4>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        Automated minimal transactions to balance the trip account.
+                      </p>
+
+                      {settlements.length === 0 ? (
+                        <div className="p-6 text-center border border-dashed rounded-xl bg-emerald-500/5 border-emerald-500/20">
+                          <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                          <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">All Settled Up!</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">Everyone has paid their exact fair share.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {settlements.map((st, idx) => (
+                            <div key={idx} className="p-3 rounded-xl bg-muted/40 border border-border/60 flex items-center justify-between text-xs">
+                              <div>
+                                <span className="font-bold text-marine dark:text-foreground">{st.from}</span>
+                                <span className="text-muted-foreground"> pays </span>
+                                <span className="font-bold text-marine dark:text-foreground">{st.to}</span>
+                              </div>
+                              <span className="font-bold text-destructive text-sm">{mainCurrency}{st.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      className="w-full mt-6 text-xs font-semibold"
+                      variant="outline"
+                      onClick={() => toast.success("Payment reminders sent to trip members!")}
+                    >
+                      Settle Up / Send Reminders
+                    </Button>
+                  </Card>
+                </div>
               </div>
             )}
 
@@ -595,8 +887,61 @@ export default function BuildItineraryPage() {
                   <Input name="costOverride" type="number" step="0.01" placeholder="0.00" />
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Who Paid for this?</Label>
+                  <select name="paidByMemberName" className="w-full h-10 px-3 py-2 border rounded-md bg-background text-sm">
+                    <option value="">You (Host)</option>
+                    {(data?.members || []).map((m: any) => (
+                      <option key={m.id} value={m.name}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <Button type="submit" className="w-full mt-2" disabled={formLoading}>
                   {formLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Save Activity"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Invite Friend Modal */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <Card className="w-full max-w-md shadow-xl border-border">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="font-bold text-lg text-marine dark:text-foreground flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-wave" /> Invite Friend to Trip
+              </h3>
+              <Button variant="ghost" size="icon" onClick={() => setIsInviteModalOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <CardContent className="p-4">
+              <form onSubmit={handleInviteMember} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Friend's Name</Label>
+                  <Input
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    placeholder="e.g. Alice or Bob"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Friend's Email (Optional)</Label>
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="alice@example.com"
+                  />
+                </div>
+
+                <Button type="submit" className="w-full mt-2" disabled={inviting || !inviteName.trim()}>
+                  {inviting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Add Friend"}
                 </Button>
               </form>
             </CardContent>

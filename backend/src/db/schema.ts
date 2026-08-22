@@ -69,6 +69,16 @@ export const tripActivities = pgTable("trip_activities", {
   category: activityCategory("category").default("activity"),
   costOverride: numeric("cost_override", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  paidByMemberName: varchar("paid_by_member_name", { length: 120 }),
+});
+
+export const tripMembers = pgTable("trip_members", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tripId: uuid("trip_id").references(() => trips.id, { onDelete: "cascade" }).notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  email: varchar("email", { length: 160 }),
+  role: varchar("role", { length: 20 }).default("member"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const posts = pgTable("posts", {
