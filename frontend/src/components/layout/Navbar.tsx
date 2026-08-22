@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { User, LogOut, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { useEffect, useState } from "react";
 
 export function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState<any>(null);
 
@@ -41,33 +42,52 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-16 items-center gap-4 px-4">
+    <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto flex h-16 items-center gap-4 px-4 max-w-7xl">
         <div className="flex min-w-0 flex-1 items-center">
           <Link href="/dashboard" className="mr-6 shrink-0" aria-label="Dashboard">
             <Logo size="sm" />
           </Link>
 
           <nav className="no-scrollbar flex min-w-0 items-center gap-5 overflow-x-auto whitespace-nowrap">
-            <Link href="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
+            <Link 
+              href="/dashboard" 
+              className={`text-sm font-medium transition-colors ${pathname === "/dashboard" ? "text-primary font-bold" : "text-muted-foreground hover:text-primary"}`}
+            >
               Dashboard
             </Link>
-            <Link href="/explore" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+            <Link 
+              href="/explore" 
+              className={`text-sm font-medium transition-colors ${pathname === "/explore" ? "text-primary font-bold" : "text-muted-foreground hover:text-primary"}`}
+            >
               Explore & Discover
             </Link>
-            <Link href="/trips" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+            <Link 
+              href="/trips" 
+              className={`text-sm font-medium transition-colors ${pathname === "/trips" ? "text-primary font-bold" : "text-muted-foreground hover:text-primary"}`}
+            >
               My Trips
             </Link>
-            <Link href="/community" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+            <Link 
+              href="/community" 
+              className={`text-sm font-medium transition-colors ${pathname === "/community" ? "text-primary font-bold" : "text-muted-foreground hover:text-primary"}`}
+            >
               Community
             </Link>
-            <Link href="/calendar" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+            <Link 
+              href="/calendar" 
+              className={`text-sm font-medium transition-colors ${pathname === "/calendar" ? "text-primary font-bold" : "text-muted-foreground hover:text-primary"}`}
+            >
               Calendar
             </Link>
             {isAdmin && (
               <Link
                 href="/admin"
-                className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-bold text-primary transition-colors hover:text-primary"
+                className={`rounded-full px-3 py-1 text-sm font-bold transition-colors border ${
+                  pathname === "/admin" 
+                    ? "bg-marine text-white border-marine shadow-2xs" 
+                    : "border-primary/20 bg-primary/10 text-primary hover:bg-primary/20"
+                }`}
               >
                 Admin Panel
               </Link>
