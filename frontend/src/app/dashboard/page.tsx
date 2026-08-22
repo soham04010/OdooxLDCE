@@ -10,7 +10,11 @@ import {
   ChevronDown,
   Plus,
   Search,
+  Heart,
+  Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
+import { getUserPreferences, PERSONA_LABELS, toggleWishlistCity, isCityWishlisted } from "@/lib/personalization";
 
 import { HeroSlider } from "@/components/hero-slider";
 import { Navbar } from "@/components/layout/Navbar";
@@ -273,10 +277,14 @@ export default function DashboardPage() {
         </section>
 
         <section className="mt-10">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-wave">
-            Trending Destinations
-          </p>
-          <SectionHeading>Top regional selections</SectionHeading>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-wave flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Tailored for {PERSONA_LABELS[getUserPreferences().persona]?.label || "Travelers"}
+              </p>
+              <SectionHeading>Recommended Destinations For You</SectionHeading>
+            </div>
+          </div>
 
           {loading ? (
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -300,13 +308,34 @@ export default function DashboardPage() {
                   typeof city.costIndex === "number"
                     ? costLabel(city.costIndex)
                     : null;
+                const isSaved = isCityWishlisted(city.id);
 
                 return (
                   <Link
                     key={city.id}
                     href="/cities"
-                    className="group overflow-hidden rounded-xl border border-border bg-card transition hover:shadow-md"
+                    className="group relative overflow-hidden rounded-xl border border-border bg-card transition hover:shadow-md"
                   >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const added = toggleWishlistCity(city.id);
+                        toast.success(
+                          added
+                            ? `${city.name} added to your wishlist!`
+                            : `${city.name} removed from wishlist.`
+                        );
+                        // Force state reload
+                        setQuery((prev) => prev);
+                      }}
+                      className="absolute top-2.5 right-2.5 z-20 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-xs transition hover:bg-black/70 hover:scale-110"
+                      title={isSaved ? "Remove from Wishlist" : "Save to Wishlist"}
+                    >
+                      <Heart className={`h-4 w-4 ${isSaved ? "fill-red-500 text-red-500" : "text-white"}`} />
+                    </button>
+
                     <div className="relative aspect-square w-full overflow-hidden bg-muted">
                       <img
                         src={

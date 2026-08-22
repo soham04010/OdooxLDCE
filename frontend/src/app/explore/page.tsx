@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, MapPin, Compass, Plus, X, Loader2, Plane, Hotel, Utensils, Globe, TrendingUp } from "lucide-react";
+import { Search, MapPin, Compass, Plus, X, Loader2, Plane, Hotel, Utensils, Globe, TrendingUp, Heart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { toast } from "sonner";
+import { toggleWishlistCity, isCityWishlisted } from "@/lib/personalization";
 
 const CATEGORY_ICONS: Record<string, any> = {
   activity: Compass,
@@ -239,14 +240,29 @@ export default function ExplorePage() {
                     </div>
 
                     {isCity && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => setSelectedCity(item)}
-                        className="text-xs gap-1.5 h-9 font-semibold"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add to Trip
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => {
+                            const added = toggleWishlistCity(item.id);
+                            toast.success(added ? `${item.name} added to your wishlist!` : `${item.name} removed from wishlist.`);
+                            setQuery((q) => q);
+                          }}
+                          className="h-9 w-9 border-border/80 text-muted-foreground hover:text-red-500 transition-colors"
+                          title={isCityWishlisted(item.id) ? "Remove from Wishlist" : "Save to Wishlist"}
+                        >
+                          <Heart className={`w-4 h-4 ${isCityWishlisted(item.id) ? "fill-red-500 text-red-500" : ""}`} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => setSelectedCity(item)}
+                          className="text-xs gap-1.5 h-9 font-semibold"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add to Trip
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </Card>
