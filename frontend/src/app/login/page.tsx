@@ -24,20 +24,25 @@ export default function LoginPage() {
     const data = Object.fromEntries(formData.entries());
 
     try {
-      const res = await fetch(`http://localhost:5000/api/auth/login`, {
+      const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include",
       });
 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Authentication failed");
 
-      localStorage.setItem("token", json.token);
+      if (json.token) {
+        localStorage.setItem("token", json.token);
+      } else {
+        localStorage.removeItem("token");
+      }
       localStorage.setItem("user", JSON.stringify(json.user));
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +69,15 @@ export default function LoginPage() {
         <div className="flex flex-1 items-center justify-center lg:justify-start">
           <form onSubmit={handleLogin} className="w-full max-w-sm py-10">
             <div className="grid gap-5">
+              <div className="space-y-2 text-center lg:text-left">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  Welcome back
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Enter your email and password to sign in
+                </p>
+              </div>
+
               {error && (
                 <div
                   className="rounded-md bg-destructive/10 p-3 text-center text-sm font-medium text-destructive"
@@ -89,7 +103,15 @@ export default function LoginPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="#"
+                    className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   name="password"
@@ -118,7 +140,6 @@ export default function LoginPage() {
                   Create an account
                 </Link>
               </p>
-
             </div>
           </form>
         </div>

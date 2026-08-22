@@ -3,89 +3,377 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { users } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments } from './db/schema';
+import { eq, ilike, and, or, desc, asc } from 'drizzle-orm';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123'; // Temporary
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
-app.get('/', (req, res) => {
-  res.send('Backend is running!');
-});
+const requireAuth = (req: any, res: any, next: any) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
 
-// --- AUTH ENDPOINTS ---
+app.get('/', (req, res) => res.send('GlobeTrotter API is running!'));
 
+// --- AUTH ---
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone, city, country } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'Missing fields' });
 
-    if (!name || !email || !password) {
-       res.status(400).json({ error: 'All fields are required' });
-       return;
-    }
+    const existing = await db.select().from(users).where(eq(users.email, email));
+    if (existing.length > 0) return res.status(400).json({ error: 'User already exists, try logging in' });
 
-    const existingUsers = await db.select().from(users).where(eq(users.email, email));
-    if (existingUsers.length > 0) {
-       res.status(400).json({ error: 'User already exists, try logging in' });
-       return;
-    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newUser = await db.insert(users).values({ name, email, passwordHash, phone, city, country }).returning();
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await db.insert(users).values({
-      name,
-      email,
-      passwordHash: hashedPassword
-    }).returning();
-
-    const token = jwt.sign({ userId: newUser[0].id }, JWT_SECRET, { expiresIn: '1d' });
-
-    res.status(201).json({ user: { id: newUser[0].id, name: newUser[0].name, email: newUser[0].email }, token });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Registration failed' });
-  }
+    const token = jwt.sign({ userId: newUser[0].id }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+    res.status(201).json({ user: { id: newUser[0].id, name: newUser[0].name, email: newUser[0].email } });
+  } catch (err) { res.status(500).json({ error: 'Registration failed' }); }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-       res.status(400).json({ error: 'Email and password are required' });
-       return;
+    const found = await db.select().from(users).where(eq(users.email, email));
+    if (!found.length || !(await bcrypt.compare(password, found[0].passwordHash))) {
+      return res.status(400).json({ error: 'Invalid credentials' });
     }
+    const token = jwt.sign({ userId: found[0].id }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+    res.json({ user: { id: found[0].id, name: found[0].name, email: found[0].email } });
+  } catch (err) { res.status(500).json({ error: 'Login failed' }); }
+});
 
-    const foundUsers = await db.select().from(users).where(eq(users.email, email));
-    if (foundUsers.length === 0) {
-       res.status(400).json({ error: 'User does not exist, please sign up' });
-       return;
-    }
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  res.clearCookie('token');
+  res.json({ message: 'Logged out' });
+});
 
-    const user = foundUsers[0];
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
+app.get('/api/auth/me', requireAuth, async (req: any, res: any) => {
+  const found = await db.select().from(users).where(eq(users.id, req.user.userId));
+  if (!found.length) return res.status(404).json({ error: 'Not found' });
+  const { passwordHash, ...safe } = found[0];
+  res.json({ user: safe });
+});
+
+app.patch('/api/auth/me', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, avatarUrl } = req.body;
+    const updated = await db.update(users).set({ name, avatarUrl }).where(eq(users.id, req.user.userId)).returning();
+    const { passwordHash, ...safe } = updated[0];
+    res.json({ user: safe });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/me', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, avatarUrl } = req.body;
+    const updated = await db.update(users).set({ name, avatarUrl }).where(eq(users.id, req.user.userId)).returning();
+    const { passwordHash, ...safe } = updated[0];
+    res.json({ user: safe });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/users/me/posts', requireAuth, async (req: any, res: any) => {
+  try {
+    const p = await db.select({ post: posts, user: users.name, userAvatar: users.avatarUrl })
+      .from(posts).leftJoin(users, eq(posts.userId, users.id))
+      .where(eq(posts.userId, req.user.userId))
+      .orderBy(desc(posts.createdAt));
+      
+    const enriched = await Promise.all(p.map(async (item: any) => {
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, item.post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, item.post.id));
+      return { ...item, likesCount: likes.length, commentsCount: comments.length };
+    }));
+
+    res.json(enriched);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/community/posts', async (req: any, res: any) => {
+  const { q } = req.query;
+  let query: any = db
+    .select({ post: posts, user: users.name, userAvatar: users.avatarUrl })
+    .from(posts)
+    .leftJoin(users, eq(posts.userId, users.id));
+
+  if (q) {
+    query = query.where(
+      or(
+        ilike(posts.title, `%${q}%`),
+        ilike(posts.content, `%${q}%`),
+        ilike(posts.city, `%${q}%`),
+        ilike(posts.country, `%${q}%`)
+      )
+    );
+  }
+
+  const p = await query.orderBy(desc(posts.createdAt)).limit(50);
+  
+  const enriched = await Promise.all(p.map(async (item: any) => {
+    const likes = await db.select().from(postLikes).where(eq(postLikes.postId, item.post.id));
+    const comments = await db.select().from(postComments).where(eq(postComments.postId, item.post.id));
+    return { ...item, likesCount: likes.length, commentsCount: comments.length };
+  }));
+
+  res.json(enriched);
+});
+
+app.post('/api/community/posts', requireAuth, async (req: any, res: any) => {
+  try {
+    const { title, content, imageUrls, country, city } = req.body;
+    const inserted = await db.insert(posts).values({
+      userId: req.user.userId,
+      title,
+      content,
+      imageUrls,
+      country,
+      city
+    }).returning();
+    res.json(inserted[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/community/posts/:id', requireAuth, async (req: any, res: any) => {
+  try {
+    const postData = await db.select({ post: posts, user: users.name, userAvatar: users.avatarUrl })
+      .from(posts).leftJoin(users, eq(posts.userId, users.id)).where(eq(posts.id, req.params.id));
+      
+    if (!postData.length) return res.status(404).json({ error: "Not found" });
     
-    if (!isMatch) {
-       res.status(400).json({ error: 'Invalid password' });
-       return;
+    const comments = await db.select({ comment: postComments, user: users.name, userAvatar: users.avatarUrl })
+      .from(postComments).leftJoin(users, eq(postComments.userId, users.id)).where(eq(postComments.postId, req.params.id)).orderBy(asc(postComments.createdAt));
+      
+    const likes = await db.select().from(postLikes).where(eq(postLikes.postId, req.params.id));
+    const hasLiked = likes.some(l => l.userId === req.user.userId);
+    
+    res.json({ ...postData[0], comments, likesCount: likes.length, hasLiked });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/community/posts/:id/like', requireAuth, async (req: any, res: any) => {
+  try {
+    const existing = await db.select().from(postLikes).where(and(eq(postLikes.postId, req.params.id), eq(postLikes.userId, req.user.userId)));
+    if (existing.length > 0) {
+      await db.delete(postLikes).where(eq(postLikes.id, existing[0].id));
+      res.json({ liked: false });
+    } else {
+      await db.insert(postLikes).values({ postId: req.params.id, userId: req.user.userId });
+      res.json({ liked: true });
     }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1d' });
+app.post('/api/community/posts/:id/comments', requireAuth, async (req: any, res: any) => {
+  try {
+    const { content } = req.body;
+    const inserted = await db.insert(postComments).values({ postId: req.params.id, userId: req.user.userId, content }).returning();
+    res.json(inserted[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
-    res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Login failed' });
+app.get('/api/search', async (req: any, res: any) => {
+  try {
+    const { q, type } = req.query; // type: 'city' or 'activity'
+    let results = [];
+    if (type === 'city' || !type) {
+      const c = await db.select().from(cities).where(ilike(cities.name, `%${q || ''}%`)).limit(20);
+      results.push(...c.map(x => ({ ...x, _resultType: 'city' })));
+    }
+    if (type === 'activity' || !type) {
+      const a = await db.select({ activity: activities, city: cities }).from(activities).leftJoin(cities, eq(activities.cityId, cities.id)).where(ilike(activities.name, `%${q || ''}%`)).limit(20);
+      results.push(...a.map(x => ({ ...x.activity, cityName: x.city?.name, _resultType: 'activity' })));
+    }
+    res.json(results);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/trips/:id/publish', requireAuth, async (req: any, res: any) => {
+  try {
+    const { isPublic, description } = req.body;
+    const updated = await db.update(trips).set({ isPublic, description }).where(eq(trips.id, req.params.id)).returning();
+    res.json(updated[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// --- DASHBOARD & CITIES ---
+app.get('/api/dashboard', requireAuth, async (req: any, res: any) => {
+  const recentTrips = await db.select().from(trips).where(eq(trips.userId, req.user.userId)).orderBy(desc(trips.createdAt)).limit(3);
+  const popularCities = await db.select().from(cities).orderBy(desc(cities.popularity)).limit(5);
+  res.json({ recentTrips, popularCities });
+});
+
+app.get('/api/cities', requireAuth, async (req: any, res: any) => {
+  const results = await db.select().from(cities);
+  res.json({ cities: results });
+});
+
+app.post('/api/cities', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, country, region } = req.body;
+    const newCity = await db.insert(cities).values({
+      name, country, region, costIndex: 50, popularity: 0
+    }).returning();
+    res.status(201).json(newCity[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// --- TRIPS ---
+app.post('/api/trips', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, description, startDate, endDate, coverPhotoUrl } = req.body;
+    const newTrip = await db.insert(trips).values({
+      userId: req.user.userId, name, description, startDate, endDate, coverPhotoUrl
+    }).returning();
+    res.status(201).json(newTrip[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/trips/:tripId/stops', requireAuth, async (req: any, res: any) => {
+  try {
+    const { cityId, orderIndex, startDate, endDate, budget } = req.body;
+    const newStop = await db.insert(tripStops).values({
+      tripId: req.params.tripId, cityId, orderIndex, startDate, endDate, budget
+    }).returning();
+    res.status(201).json({ stop: newStop[0] });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/trips/:tripId/stops/:stopId', requireAuth, async (req: any, res: any) => {
+  require('fs').appendFileSync('patch_debug.log', `\n[${new Date().toISOString()}] POST request received! tripId: ${req.params.tripId}, stopId: ${req.params.stopId}, budget: ${req.body.budget}\n`);
+  try {
+    const { budget } = req.body;
+    const updated = await db.update(tripStops)
+      .set({ budget })
+      .where(eq(tripStops.id, req.params.stopId))
+      .returning();
+    require('fs').appendFileSync('patch_debug.log', `[${new Date().toISOString()}] Update successful.\n`);
+    res.json(updated[0]);
+  } catch (err: any) { 
+    require('fs').appendFileSync('patch_debug.log', `[${new Date().toISOString()}] Error: ${err.message}\n`);
+    res.status(500).json({ error: err.message }); 
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
+app.get('/api/trips', requireAuth, async (req: any, res: any) => {
+  const userTrips = await db.select().from(trips).where(eq(trips.userId, req.user.userId)).orderBy(desc(trips.startDate));
+  res.json(userTrips);
 });
+
+app.get('/api/public/trips/:slug', async (req: any, res: any) => {
+  const tripData = await db.select().from(trips).where(eq(trips.shareSlug, req.params.slug));
+  if (!tripData.length) return res.status(404).json({ error: 'Trip not found' });
+  const tripStopsData = await db.select().from(tripStops).where(eq(tripStops.tripId, tripData[0].id));
+  res.json({ trip: tripData[0], stops: tripStopsData });
+});
+
+app.get('/api/community/trips', async (req: any, res: any) => {
+  const { q } = req.query;
+  let query: any = db
+    .selectDistinct({ trip: trips, user: users.name })
+    .from(trips)
+    .leftJoin(users, eq(trips.userId, users.id))
+    .leftJoin(tripStops, eq(trips.id, tripStops.tripId))
+    .leftJoin(cities, eq(tripStops.cityId, cities.id));
+    
+  if (q) {
+    query = query.where(
+      and(
+        eq(trips.isPublic, true),
+        or(
+          ilike(trips.name, `%${q}%`),
+          ilike(cities.name, `%${q}%`),
+          ilike(cities.country, `%${q}%`)
+        )
+      )
+    );
+  } else {
+    query = query.where(eq(trips.isPublic, true));
+  }
+
+  const publicTrips = await query.orderBy(desc(trips.createdAt)).limit(50);
+  res.json(publicTrips);
+});
+
+app.get('/api/trips/:id', requireAuth, async (req: any, res: any) => {
+  const tripData = await db.select().from(trips).where(eq(trips.id, req.params.id));
+  if (!tripData.length) return res.status(404).json({ error: 'Trip not found' });
+  
+  // Fetch stops with cities
+  const stops = await db.select({
+    stop: tripStops,
+    city: cities
+  }).from(tripStops).leftJoin(cities, eq(tripStops.cityId, cities.id)).where(eq(tripStops.tripId, req.params.id)).orderBy(asc(tripStops.orderIndex));
+  
+  // For each stop, fetch activities (in a real app, do one query and group, but this is fine for hackathon)
+  const stopsWithActivities = await Promise.all(stops.map(async (s: any) => {
+    const stopActivities = await db.select({
+      item: tripActivities,
+      activity: activities
+    }).from(tripActivities).leftJoin(activities, eq(tripActivities.activityId, activities.id)).where(eq(tripActivities.stopId, s.stop.id)).orderBy(asc(tripActivities.dayNumber));
+    return { ...s, activities: stopActivities };
+  }));
+
+  res.json({ trip: tripData[0], stops: stopsWithActivities });
+});
+
+// --- STOPS & ACTIVITIES ---
+app.post('/api/trips/:id/stops', requireAuth, async (req: any, res: any) => {
+  try {
+    const { cityId, startDate, endDate, budget } = req.body;
+    // Get current max order
+    const existingStops = await db.select().from(tripStops).where(eq(tripStops.tripId, req.params.id));
+    const orderIndex = existingStops.length;
+    
+    const stop = await db.insert(tripStops).values({
+      tripId: req.params.id, cityId, startDate, endDate, budget, orderIndex
+    }).returning();
+    res.status(201).json(stop[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/cities/:cityId/activities', requireAuth, async (req: any, res: any) => {
+  const cityActivities = await db.select().from(activities).where(eq(activities.cityId, req.params.cityId));
+  res.json(cityActivities);
+});
+
+app.post('/api/activities', requireAuth, async (req: any, res: any) => {
+  try {
+    const { cityId, name, type, cost, durationMinutes, description } = req.body;
+    const newActivity = await db.insert(activities).values({
+      cityId, name, type, cost: cost || 0, durationMinutes, description
+    }).returning();
+    res.status(201).json(newActivity[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/stops/:stopId/activities', requireAuth, async (req: any, res: any) => {
+  try {
+    const { activityId, dayNumber, startTime, category, notes, costOverride } = req.body;
+    const item = await db.insert(tripActivities).values({
+      stopId: req.params.stopId, activityId, dayNumber, startTime, category, notes, costOverride
+    }).returning();
+    res.status(201).json(item[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.listen(port, () => console.log(`API running on ${port}`));
