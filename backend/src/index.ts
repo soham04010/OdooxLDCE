@@ -14,7 +14,7 @@ const app = express();
 const port = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
 
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -107,6 +107,32 @@ app.post('/api/trips', requireAuth, async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/trips/:tripId/stops', requireAuth, async (req: any, res: any) => {
+  try {
+    const { cityId, orderIndex, startDate, endDate, budget } = req.body;
+    const newStop = await db.insert(tripStops).values({
+      tripId: req.params.tripId, cityId, orderIndex, startDate, endDate, budget
+    }).returning();
+    res.status(201).json({ stop: newStop[0] });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/trips/:tripId/stops/:stopId', requireAuth, async (req: any, res: any) => {
+  require('fs').appendFileSync('patch_debug.log', `\n[${new Date().toISOString()}] POST request received! tripId: ${req.params.tripId}, stopId: ${req.params.stopId}, budget: ${req.body.budget}\n`);
+  try {
+    const { budget } = req.body;
+    const updated = await db.update(tripStops)
+      .set({ budget })
+      .where(eq(tripStops.id, req.params.stopId))
+      .returning();
+    require('fs').appendFileSync('patch_debug.log', `[${new Date().toISOString()}] Update successful.\n`);
+    res.json(updated[0]);
+  } catch (err: any) { 
+    require('fs').appendFileSync('patch_debug.log', `[${new Date().toISOString()}] Error: ${err.message}\n`);
+    res.status(500).json({ error: err.message }); 
+  }
+});
+
 app.get('/api/trips', requireAuth, async (req: any, res: any) => {
   const userTrips = await db.select().from(trips).where(eq(trips.userId, req.user.userId)).orderBy(desc(trips.startDate));
   res.json(userTrips);
@@ -170,6 +196,16 @@ app.post('/api/trips/:id/stops', requireAuth, async (req: any, res: any) => {
 app.get('/api/cities/:cityId/activities', requireAuth, async (req: any, res: any) => {
   const cityActivities = await db.select().from(activities).where(eq(activities.cityId, req.params.cityId));
   res.json(cityActivities);
+});
+
+app.post('/api/activities', requireAuth, async (req: any, res: any) => {
+  try {
+    const { cityId, name, type, cost, durationMinutes, description } = req.body;
+    const newActivity = await db.insert(activities).values({
+      cityId, name, type, cost: cost || 0, durationMinutes, description
+    }).returning();
+    res.status(201).json(newActivity[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/stops/:stopId/activities', requireAuth, async (req: any, res: any) => {

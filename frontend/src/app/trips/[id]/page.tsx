@@ -10,6 +10,59 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const CURRENCY_MAP: Record<string, string> = {
+  'United States': '$', 'USA': '$', 'India': '₹', 'United Kingdom': '£',
+  'France': '€', 'Germany': '€', 'Italy': '€', 'Spain': '€', 'Japan': '¥',
+  'Australia': 'A$', 'Canada': 'C$', 'Brazil': 'R$', 'China': '¥'
+};
+const getCurrency = (country: string) => CURRENCY_MAP[country] || '$';
+
+function BudgetDisplay({ stopId, tripId, initialBudget, onUpdate, spent, currency }: any) {
+  const [val, setVal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!val) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/trips/${tripId}/stops/${stopId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ budget: val, _method: "PATCH" }),
+        credentials: "include"
+      });
+      if (!res.ok) {
+        throw new Error(`Failed with status ${res.status}`);
+      }
+      onUpdate();
+    } catch (e: any) {
+      console.error("Failed to update budget:", e);
+      alert("Network error: Could not update budget. Please ensure backend is running at localhost:5000.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (Number(initialBudget) === 0) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">{currency}</span>
+        <Input type="number" step="0.01" className="h-7 w-20 px-2 text-xs" value={val} onChange={e=>setVal(e.target.value)} placeholder="0.00" />
+        <Button size="sm" className="h-7 text-xs px-2" onClick={handleSave} disabled={saving}>Set</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-medium">{currency}{Number(initialBudget).toFixed(2)}</span>
+      {spent > Number(initialBudget) && (
+         <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-bold animate-pulse">Over Limit</span>
+      )}
+    </div>
+  );
+}
+
 export default function BuildItineraryPage() {
   const params = useParams();
   const router = useRouter();
@@ -65,38 +118,10 @@ export default function BuildItineraryPage() {
       const res = await fetch(`http://localhost:5000/api/activities?cityId=${cityId}`, { credentials: "include" });
       if (res.ok) {
         const json = await res.json();
-        setActivities(json.activities || []);
+        setActivities(json || []);
       }
     } catch (e) {
       console.error(e);
-    }
-  };
-
-  const handleAddStopSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setFormLoading(true);
-    const formData = new FormData(e.currentTarget);
-    const payload = {
-      cityId: formData.get("cityId"),
-      startDate: formData.get("startDate"),
-      endDate: formData.get("endDate"),
-      budget: formData.get("budget"),
-      orderIndex: data?.stops.length || 0
-    };
-
-    try {
-      await fetch(`http://localhost:5000/api/trips/${tripId}/stops`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        credentials: "include"
-      });
-      setIsAddStopModalOpen(false);
-      fetchTrip(); // reload
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setFormLoading(false);
     }
   };
 
@@ -104,18 +129,43 @@ export default function BuildItineraryPage() {
     e.preventDefault();
     setFormLoading(true);
     const formData = new FormData(e.currentTarget);
-    const payload = {
-      activityId: formData.get("activityId"),
-      dayNumber: 1, // Simplified for wireframe mapping
-      startTime: formData.get("startTime"),
-      costOverride: formData.get("costOverride") || undefined,
-    };
+    const activityName = formData.get("activityName") as string;
+    const dateStr = formData.get("date") as string;
+    const startTime = formData.get("startTime") as string;
+    const customCost = formData.get("costOverride") as string;
 
     try {
+      // Create activity on the fly
+      const actRes = await fetch("http://localhost:5000/api/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cityId: activeCityId,
+          name: activityName,
+          type: "activity",
+          cost: customCost || 0,
+        }),
+        credentials: "include"
+      });
+      const newAct = await actRes.json();
+
+      // Find the stop to calculate dayNumber
+      const stop = data?.stops.find(s => s.stop.id === activeStopId);
+      const startD = new Date(stop.stop.startDate);
+      const actD = new Date(dateStr);
+      let dayNumber = Math.floor((actD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      if (dayNumber < 1) dayNumber = 1;
+
+      // Add to itinerary
       await fetch(`http://localhost:5000/api/stops/${activeStopId}/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          activityId: newAct.id,
+          dayNumber,
+          startTime,
+          costOverride: customCost || undefined,
+        }),
         credentials: "include"
       });
       setIsAddActivityModalOpen(false);
@@ -126,6 +176,13 @@ export default function BuildItineraryPage() {
       setFormLoading(false);
     }
   };
+
+  const totalBudget = data?.stops.reduce((acc, stop) => acc + Number(stop.stop.budget || 0), 0) || 0;
+  const totalSpend = data?.stops.reduce((acc, stop) => {
+    return acc + stop.activities.reduce((sum: number, act: any) => sum + Number(act.item.costOverride || act.activity.cost || 0), 0);
+  }, 0) || 0;
+  
+  const mainCurrency = data?.stops && data.stops.length > 0 ? getCurrency(data.stops[0].city.country) : '$';
 
   return (
     <div className="min-h-screen bg-background font-sans relative">
@@ -144,13 +201,37 @@ export default function BuildItineraryPage() {
         ) : (
           <div className="space-y-6">
             
+            <Card className="border border-border/80 shadow-sm bg-muted/10 mb-8">
+               <CardContent className="p-6 flex flex-col md:flex-row gap-6 justify-between items-center">
+                 <div>
+                   <h2 className="text-lg font-bold mb-1">Overall Expense & Budget</h2>
+                   <p className="text-sm text-muted-foreground">Keep track of your spending across all sections.</p>
+                 </div>
+                 <div className="flex gap-8 text-center">
+                    <div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Budget</div>
+                      <div className="text-2xl font-bold">{mainCurrency}{totalBudget.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Spent</div>
+                      <div className={`text-2xl font-bold ${totalSpend > totalBudget && totalBudget > 0 ? "text-destructive" : ""}`}>
+                        {mainCurrency}{totalSpend.toFixed(2)}
+                      </div>
+                    </div>
+                 </div>
+               </CardContent>
+            </Card>
+
             {data.stops.length === 0 ? (
                <Card className="border border-border text-center py-12 shadow-sm">
                  <h2 className="text-xl font-bold mb-2">No Sections Added</h2>
                  <p className="text-muted-foreground mb-4">You haven't added any stops (sections) to this trip yet.</p>
                </Card>
             ) : (
-              data.stops.map((stopItem: any, index: number) => (
+              data.stops.map((stopItem: any, index: number) => {
+                const sectionSpent = stopItem.activities.reduce((sum: number, act: any) => sum + Number(act.item.costOverride || act.activity.cost || 0), 0);
+                
+                return (
                 <Card key={stopItem.stop.id} className="border border-border/80 shadow-sm">
                   <CardContent className="p-6">
                     <h3 className="font-bold text-lg mb-2">Section {index + 1}: {stopItem.city.name}</h3>
@@ -167,12 +248,24 @@ export default function BuildItineraryPage() {
                       </div>
                       <div className="flex-1 border rounded-md px-4 py-2 text-sm flex items-center justify-between">
                         <span className="text-muted-foreground">Budget of this section:</span>
-                        <span className="font-medium">${stopItem.stop.budget}</span>
+                        <BudgetDisplay 
+                          stopId={stopItem.stop.id} 
+                          tripId={tripId} 
+                          initialBudget={stopItem.stop.budget} 
+                          onUpdate={fetchTrip} 
+                          spent={sectionSpent}
+                          currency={getCurrency(stopItem.city.country)}
+                        />
                       </div>
                     </div>
 
                     <div className="mt-6 border-t pt-4">
-                       <h4 className="font-semibold text-sm mb-3">Activities</h4>
+                       <h4 className="font-semibold text-sm mb-3 flex items-center justify-between">
+                         Activities
+                         <span className="text-xs text-muted-foreground font-normal bg-muted/50 px-2 py-1 rounded">
+                           Section Spent: {getCurrency(stopItem.city.country)}{sectionSpent.toFixed(2)}
+                         </span>
+                       </h4>
                        {stopItem.activities.length === 0 ? (
                           <p className="text-xs text-muted-foreground mb-3">No activities planned for this section yet.</p>
                        ) : (
@@ -180,10 +273,10 @@ export default function BuildItineraryPage() {
                            {stopItem.activities.map((act: any) => (
                              <div key={act.item.id} className="text-sm flex justify-between bg-muted/30 p-2 rounded border">
                                <div className="flex items-center space-x-4">
-                                 <span className="font-medium w-12">{act.item.startTime || "TBD"}</span>
+                                 <span className="font-medium w-24 text-muted-foreground">Day {act.item.dayNumber} - {act.item.startTime || "TBD"}</span>
                                  <span>{act.activity.name}</span>
                                </div>
-                               <span className="font-medium">${act.item.costOverride || act.activity.cost}</span>
+                               <span className="font-medium">{getCurrency(stopItem.city.country)}{act.item.costOverride || act.activity.cost}</span>
                              </div>
                            ))}
                          </div>
@@ -195,7 +288,7 @@ export default function BuildItineraryPage() {
 
                   </CardContent>
                 </Card>
-              ))
+              )})
             )}
 
             <Button variant="outline" className="w-full border-dashed h-14" onClick={handleAddStopClick}>
@@ -243,31 +336,27 @@ export default function BuildItineraryPage() {
             <CardContent className="p-4">
               <form onSubmit={handleAddActivitySubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Activity / Place</Label>
-                  {activities.length === 0 ? (
-                    <div className="p-3 bg-muted text-sm rounded-md">No activities available for this city in database.</div>
-                  ) : (
-                    <select name="activityId" required className="w-full h-10 px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                      <option value="">Select an activity...</option>
-                      {activities.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} (${a.cost})</option>
-                      ))}
-                    </select>
-                  )}
+                  <Label>Activity / Place Name</Label>
+                  <Input name="activityName" placeholder="e.g. Visit Eiffel Tower" required />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Start Time</Label>
-                    <Input name="startTime" type="time" required />
+                    <Label>Date</Label>
+                    <Input name="date" type="date" required />
                   </div>
                   <div className="space-y-2">
-                    <Label>Custom Cost (Optional)</Label>
-                    <Input name="costOverride" type="number" step="0.01" placeholder="Leave empty for default" />
+                    <Label>Start Time (Optional)</Label>
+                    <Input name="startTime" type="time" />
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full mt-2" disabled={formLoading || activities.length === 0}>
+                <div className="space-y-2">
+                  <Label>Estimated Cost</Label>
+                  <Input name="costOverride" type="number" step="0.01" placeholder="0.00" />
+                </div>
+
+                <Button type="submit" className="w-full mt-2" disabled={formLoading}>
                   {formLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Add Activity"}
                 </Button>
               </form>
