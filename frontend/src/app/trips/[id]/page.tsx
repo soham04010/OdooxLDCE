@@ -1,0 +1,399 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Navbar } from "@/components/layout/Navbar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, X, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export default function BuildItineraryPage() {
+  const params = useParams();
+  const router = useRouter();
+  const tripId = params.id;
+  
+  const [data, setData] = useState<{ trip: any, stops: any[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Modals state
+  const [isAddStopModalOpen, setIsAddStopModalOpen] = useState(false);
+  const [isAddActivityModalOpen, setIsAddActivityModalOpen] = useState(false);
+  
+  // Dependencies data
+  const [cities, setCities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [activeStopId, setActiveStopId] = useState<string | null>(null);
+  const [activeCityId, setActiveCityId] = useState<string | null>(null);
+
+  const [formLoading, setFormLoading] = useState(false);
+
+  const fetchTrip = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/trips/${tripId}`, { credentials: "include" });
+      if (res.ok) {
+        setData(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTrip();
+    // Fetch cities for Add Stop dropdown
+    fetch("http://localhost:5000/api/cities", { credentials: "include" })
+      .then(res => res.json())
+      .then(json => setCities(json.cities || []));
+  }, [tripId]);
+
+  const handleAddStopClick = () => {
+    setIsAddStopModalOpen(true);
+  };
+
+  const handleAddActivityClick = async (stopId: string, cityId: string) => {
+    setActiveStopId(stopId);
+    setActiveCityId(cityId);
+    setIsAddActivityModalOpen(true);
+    
+    // Fetch activities for this specific city
+    try {
+      const res = await fetch(`http://localhost:5000/api/activities?cityId=${cityId}`, { credentials: "include" });
+      if (res.ok) {
+        const json = await res.json();
+        setActivities(json.activities || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddStopSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormLoading(true);
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      cityId: formData.get("cityId"),
+      startDate: formData.get("startDate"),
+      endDate: formData.get("endDate"),
+      budget: formData.get("budget"),
+      orderIndex: data?.stops.length || 0
+    };
+
+    try {
+      await fetch(`http://localhost:5000/api/trips/${tripId}/stops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include"
+      });
+      setIsAddStopModalOpen(false);
+      fetchTrip(); // reload
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleAddActivitySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormLoading(true);
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      activityId: formData.get("activityId"),
+      dayNumber: 1, // Simplified for wireframe mapping
+      startTime: formData.get("startTime"),
+      costOverride: formData.get("costOverride") || undefined,
+    };
+
+    try {
+      await fetch(`http://localhost:5000/api/stops/${activeStopId}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include"
+      });
+      setIsAddActivityModalOpen(false);
+      fetchTrip(); // reload
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background font-sans relative">
+      <Navbar />
+      
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+        <h1 className="text-2xl font-bold mb-6">GlobalTrotter Itinerary Builder</h1>
+
+        {loading ? (
+          <div className="space-y-4">
+             <Skeleton className="w-full h-40 rounded-lg" />
+             <Skeleton className="w-full h-40 rounded-lg" />
+          </div>
+        ) : !data ? (
+          <div className="text-center py-20 text-muted-foreground border border-dashed rounded-lg">Trip not found or unauthorized</div>
+        ) : (
+          <div className="space-y-6">
+            
+            {data.stops.length === 0 ? (
+               <Card className="border border-border text-center py-12 shadow-sm">
+                 <h2 className="text-xl font-bold mb-2">No Sections Added</h2>
+                 <p className="text-muted-foreground mb-4">You haven't added any stops (sections) to this trip yet.</p>
+               </Card>
+            ) : (
+              data.stops.map((stopItem: any, index: number) => (
+                <Card key={stopItem.stop.id} className="border border-border/80 shadow-sm">
+                  <CardContent className="p-6">
+                    <h3 className="font-bold text-lg mb-2">Section {index + 1}: {stopItem.city.name}</h3>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      All the necessary information about this section. This can be anything like travel section, hotel or any other activity.
+                    </p>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex-1 border rounded-md px-4 py-2 text-sm flex items-center justify-between">
+                        <span className="text-muted-foreground">Date Range:</span>
+                        <span className="font-medium">
+                           {new Date(stopItem.stop.startDate).toLocaleDateString()} to {new Date(stopItem.stop.endDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex-1 border rounded-md px-4 py-2 text-sm flex items-center justify-between">
+                        <span className="text-muted-foreground">Budget of this section:</span>
+                        <span className="font-medium">${stopItem.stop.budget}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 border-t pt-4">
+                       <h4 className="font-semibold text-sm mb-3">Activities</h4>
+                       {stopItem.activities.length === 0 ? (
+                          <p className="text-xs text-muted-foreground mb-3">No activities planned for this section yet.</p>
+                       ) : (
+                         <div className="space-y-2 mb-4">
+                           {stopItem.activities.map((act: any) => (
+                             <div key={act.item.id} className="text-sm flex justify-between bg-muted/30 p-2 rounded border">
+                               <div className="flex items-center space-x-4">
+                                 <span className="font-medium w-12">{act.item.startTime || "TBD"}</span>
+                                 <span>{act.activity.name}</span>
+                               </div>
+                               <span className="font-medium">${act.item.costOverride || act.activity.cost}</span>
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                       <Button variant="outline" size="sm" onClick={() => handleAddActivityClick(stopItem.stop.id, stopItem.city.id)}>
+                         <Plus className="w-4 h-4 mr-2"/> Add Activity to Section
+                       </Button>
+                    </div>
+
+                  </CardContent>
+                </Card>
+              ))
+            )}
+
+            <Button variant="outline" className="w-full border-dashed h-14" onClick={handleAddStopClick}>
+              <Plus className="w-5 h-5 mr-2" /> Add another Section
+            </Button>
+
+          </div>
+        )}
+      </main>
+
+      {/* Add Stop Modal */}
+      {isAddStopModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
+          <Card className="w-full max-w-md shadow-xl border-border my-8">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="font-bold text-lg">Add a New Section (Stop)</h3>
+              <Button variant="ghost" size="icon" onClick={() => setIsAddStopModalOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <CardContent className="p-4">
+              <AddStopForm 
+                tripId={tripId as string} 
+                cities={cities} 
+                onSuccess={() => {
+                  setIsAddStopModalOpen(false);
+                  fetchTrip();
+                }} 
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Add Activity Modal */}
+      {isAddActivityModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md shadow-xl border-border">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="font-bold text-lg">Add Activity</h3>
+              <Button variant="ghost" size="icon" onClick={() => setIsAddActivityModalOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <CardContent className="p-4">
+              <form onSubmit={handleAddActivitySubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Activity / Place</Label>
+                  {activities.length === 0 ? (
+                    <div className="p-3 bg-muted text-sm rounded-md">No activities available for this city in database.</div>
+                  ) : (
+                    <select name="activityId" required className="w-full h-10 px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="">Select an activity...</option>
+                      {activities.map(a => (
+                        <option key={a.id} value={a.id}>{a.name} (${a.cost})</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Start Time</Label>
+                    <Input name="startTime" type="time" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Custom Cost (Optional)</Label>
+                    <Input name="costOverride" type="number" step="0.01" placeholder="Leave empty for default" />
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full mt-2" disabled={formLoading || activities.length === 0}>
+                  {formLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Add Activity"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddStopForm({ tripId, cities, onSuccess }: { tripId: string, cities: any[], onSuccess: () => void }) {
+  const [isCustom, setIsCustom] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedCityId, setSelectedCityId] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Derive unique countries
+  const countries = Array.from(new Set(cities.map(c => c.country))).filter(Boolean).sort();
+  const filteredCities = cities.filter(c => c.country === selectedCountry);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      let cityId = selectedCityId;
+      
+      if (isCustom) {
+        // Create custom city first
+        const cityRes = await fetch('http://localhost:5000/api/cities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.get('customCityName'),
+            country: formData.get('customCountryName'),
+            region: formData.get('customRegion') || null
+          }),
+          credentials: 'include'
+        });
+        const cityData = await cityRes.json();
+        cityId = cityData.id;
+      }
+
+      const payload = {
+        cityId,
+        startDate: formData.get('startDate'),
+        endDate: formData.get('endDate'),
+        budget: formData.get('budget'),
+        orderIndex: 0
+      };
+
+      await fetch(`http://localhost:5000/api/trips/${tripId}/stops`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'include'
+      });
+      
+      onSuccess();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-center space-x-2 mb-2">
+        <input type="checkbox" id="customToggle" checked={isCustom} onChange={(e) => setIsCustom(e.target.checked)} className="rounded border-gray-300 text-primary focus:ring-primary" />
+        <label htmlFor="customToggle" className="text-sm font-medium">Add a custom city (not in catalog)</label>
+      </div>
+
+      {!isCustom ? (
+        <div className="space-y-3 p-3 bg-muted/20 border rounded-md">
+          <div className="space-y-1">
+            <Label>Country</Label>
+            <select value={selectedCountry} onChange={e => setSelectedCountry(e.target.value)} required className="w-full h-10 px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+              <option value="">Select Country...</option>
+              {countries.map((c: any) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label>City</Label>
+            <select value={selectedCityId} onChange={e => setSelectedCityId(e.target.value)} required disabled={!selectedCountry} className="w-full h-10 px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50">
+              <option value="">Select City...</option>
+              {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3 p-3 bg-muted/20 border rounded-md">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>City Name</Label>
+              <Input name="customCityName" placeholder="e.g. Venice" required />
+            </div>
+            <div className="space-y-1">
+              <Label>Country</Label>
+              <Input name="customCountryName" placeholder="e.g. Italy" required />
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Start Date</Label>
+          <Input name="startDate" type="date" required />
+        </div>
+        <div className="space-y-2">
+          <Label>End Date</Label>
+          <Input name="endDate" type="date" required />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Budget Estimate ($)</Label>
+        <Input name="budget" type="number" step="0.01" placeholder="500.00" required />
+      </div>
+
+      <Button type="submit" className="w-full mt-2" disabled={loading || (!isCustom && !selectedCityId)}>
+        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Save Section"}
+      </Button>
+    </form>
+  );
+}

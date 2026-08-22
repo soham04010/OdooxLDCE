@@ -27,14 +27,14 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        credentials: "include"
       });
 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Authentication failed");
 
-      localStorage.setItem("token", json.token);
       localStorage.setItem("user", JSON.stringify(json.user));
-      router.push("/");
+      router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -43,7 +43,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-100 via-gray-50 to-white dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       
       <div className="z-10 w-full max-w-md">
         <div className="flex justify-center mb-8">
@@ -51,11 +51,11 @@ export default function LoginPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
               <Command className="h-6 w-6" />
             </div>
-            Acme<span className="text-primary">Hack</span>
+            Globe<span className="text-primary">Trotter</span>
           </div>
         </div>
 
-        <Card className="border-border/50 shadow-xl shadow-black/5 backdrop-blur-sm">
+        <Card className="border shadow-sm">
           <CardHeader className="space-y-2 text-center pb-6">
             <CardTitle className="text-2xl font-semibold tracking-tight">Welcome back</CardTitle>
             <CardDescription>Enter your email and password to sign in</CardDescription>
