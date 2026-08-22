@@ -22,6 +22,7 @@ export const metadata: Metadata = {
 };
 
 import { Toaster } from "sonner";
+import { TripChatWidget } from "@/components/TripChatWidget";
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         {children}
         <Toaster richColors position="top-right" />
+        <TripChatWidget />
       </body>
     </html>
   );
