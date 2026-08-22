@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/date-picker";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -166,7 +167,14 @@ export default function CreateTripPage() {
       const tripResponse = await fetch("http://localhost:5000/api/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, startDate, endDate }),
+        body: JSON.stringify({
+          name,
+          startDate,
+          endDate,
+          // Carry the chosen city's photo onto the trip card. Newly created
+          // cities have no image yet, so fall back to a generic travel shot.
+          coverPhotoUrl: existingCity?.imageUrl || fallbackImage,
+        }),
         credentials: "include",
       });
       const newTrip = (await tripResponse.json()) as CreatedTrip;
@@ -303,27 +311,26 @@ export default function CreateTripPage() {
               </Field>
 
               <Field label="Start Date:" htmlFor="startDate">
-                <Input
+                <DatePicker
                   id="startDate"
                   name="startDate"
-                  type="date"
                   value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
+                  onChange={setStartDate}
                   required
-                  className="h-11 max-w-[220px]"
+                  placeholder="Pick a start date"
+                  className="max-w-[220px]"
                 />
               </Field>
 
               <Field label="End Date:" htmlFor="endDate">
-                <Input
+                <DatePicker
                   id="endDate"
                   name="endDate"
-                  type="date"
                   value={endDate}
-                  min={startDate || undefined}
-                  onChange={(event) => setEndDate(event.target.value)}
+                  onChange={setEndDate}
                   required
-                  className="h-11 max-w-[220px]"
+                  placeholder="Pick an end date"
+                  className="max-w-[220px]"
                 />
               </Field>
 

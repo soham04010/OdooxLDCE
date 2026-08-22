@@ -46,7 +46,7 @@ export function Navbar() {
             <Logo size="sm" />
           </Link>
 
-          <nav className="flex min-w-0 items-center gap-5 overflow-x-auto whitespace-nowrap pb-1 pt-1">
+          <nav className="no-scrollbar flex min-w-0 items-center gap-5 overflow-x-auto whitespace-nowrap">
             <Link href="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
               Dashboard
             </Link>

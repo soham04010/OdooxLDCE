@@ -58,21 +58,21 @@ export default function TripBudgetChart({ data, currency }: { data: any, currenc
     <div className="flex flex-col md:flex-row gap-8 w-full items-center bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800">
       
       {/* Left side: Stats */}
-      <div className="w-full md:w-1/3 flex flex-col justify-center gap-6">
+      <div className="w-full min-w-0 md:w-2/5 flex flex-col justify-center gap-6">
         <div>
-          <h2 className="text-2xl font-black mb-1">Financial Overview</h2>
+          <h2 className="text-2xl font-black mb-1 text-balance">Financial Overview</h2>
           <p className="text-muted-foreground text-sm">Track your spending across all destinations.</p>
         </div>
         
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl border dark:border-zinc-800">
+          <div className="min-w-0 bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl border dark:border-zinc-800">
             <p className="text-xs text-muted-foreground uppercase font-black tracking-widest mb-1">Total Budget</p>
-            <p className="text-3xl font-black text-primary">{currency}{totalBudget.toFixed(2)}</p>
+            <p className="text-xl lg:text-2xl xl:text-3xl font-black text-primary tabular-nums leading-tight break-words">{currency}{totalBudget.toFixed(2)}</p>
           </div>
           
-          <div className={`p-4 rounded-2xl border ${overBudget ? 'bg-destructive/10 border-destructive/20 text-destructive' : 'bg-zinc-50 dark:bg-zinc-950 dark:border-zinc-800'}`}>
+          <div className={`min-w-0 p-4 rounded-2xl border ${overBudget ? 'bg-destructive/10 border-destructive/20 text-destructive' : 'bg-zinc-50 dark:bg-zinc-950 dark:border-zinc-800'}`}>
             <p className="text-xs uppercase font-black tracking-widest mb-1 opacity-70">Total Spent</p>
-            <p className="text-3xl font-black">{currency}{totalSpend.toFixed(2)}</p>
+            <p className="text-xl lg:text-2xl xl:text-3xl font-black tabular-nums leading-tight break-words">{currency}{totalSpend.toFixed(2)}</p>
             {overBudget && <p className="text-xs font-bold mt-1 uppercase">Over Budget!</p>}
           </div>
         </div>

@@ -197,7 +197,7 @@ export default function AboutPage() {
             </p>
             <Link
               href="/trips/new"
-              className={cn(buttonVariants(), "mt-6 h-12 px-8 text-base")}
+              className={cn(buttonVariants(), "btn-glow mt-6 h-12 px-8 text-base")}
             >
               Plan a trip
             </Link>

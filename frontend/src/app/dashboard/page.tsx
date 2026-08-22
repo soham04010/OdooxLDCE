@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { getUserPreferences, PERSONA_LABELS, toggleWishlistCity, isCityWishlisted } from "@/lib/personalization";
 
 import { HeroSlider } from "@/components/hero-slider";
+import { Reveal } from "@/components/reveal";
 import { Navbar } from "@/components/layout/Navbar";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,7 +215,7 @@ export default function DashboardPage() {
             href="/trips/new"
             className={cn(
               buttonVariants({ size: "lg" }),
-              "h-11 rounded-full px-6 shadow-sm"
+              "btn-glow h-11 rounded-full px-6 shadow-sm"
             )}
           >
             <Plus className="h-5 w-5" />
@@ -300,7 +301,7 @@ export default function DashboardPage() {
             </Empty>
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {cities.map((city) => {
+              {cities.map((city, cityIdx) => {
                 const location = [city.region, city.country]
                   .filter(Boolean)
                   .join(", ");
@@ -311,10 +312,10 @@ export default function DashboardPage() {
                 const isSaved = isCityWishlisted(city.id);
 
                 return (
+                  <Reveal key={city.id} delay={Math.min(cityIdx, 8) * 60}>
                   <Link
-                    key={city.id}
                     href="/cities"
-                    className="group relative overflow-hidden rounded-xl border border-border bg-card transition hover:shadow-md"
+                    className="card-pop group relative block overflow-hidden rounded-xl border border-border bg-card transition hover:shadow-md"
                   >
                     <button
                       type="button"
@@ -357,6 +358,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </Link>
+                  </Reveal>
                 );
               })}
             </div>
@@ -423,18 +425,15 @@ export default function DashboardPage() {
                   </p>
                 )}
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.items.map((trip) => (
-                    <article
-                      key={trip.id}
-                      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition hover:shadow-md"
-                    >
+                  {group.items.map((trip, tripIdx) => (
+                    <Reveal key={trip.id} delay={Math.min(tripIdx, 8) * 60} as="article" className="card-pop group flex flex-col overflow-hidden rounded-xl border border-border bg-card">
                       <Link href={`/trips/${trip.id}`} className="block">
                         <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
                           {trip.coverPhotoUrl ? (
                             <img
                               src={trip.coverPhotoUrl}
                               alt={trip.name}
-                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                              className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
                             />
                           ) : (
                             <div className="h-full w-full bg-gradient-to-br from-marine via-wave to-sand" />
@@ -469,7 +468,7 @@ export default function DashboardPage() {
                           View Itinerary
                         </Link>
                       </div>
-                    </article>
+                    </Reveal>
                   ))}
                 </div>
               </div>
@@ -545,7 +544,7 @@ export default function DashboardPage() {
         href="/trips/new"
         className={cn(
           buttonVariants(),
-          "fixed bottom-6 right-6 z-30 h-14 gap-2 rounded-full px-6 text-base shadow-lg shadow-marine/25"
+          "btn-glow fixed bottom-6 right-6 z-30 h-14 gap-2 rounded-full px-6 text-base shadow-lg shadow-marine/25"
         )}
       >
         <Plus className="h-5 w-5" />
