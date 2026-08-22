@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import dynamic from "next/dynamic";
 
+import { toast } from "sonner";
+
 const DynamicPieChart = dynamic(() => import("@/components/AdminPieChart"), { ssr: false });
 const DynamicBarChart = dynamic(() => import("@/components/AdminBarChart"), { ssr: false });
 
@@ -34,12 +36,14 @@ export default function AdminDashboard() {
       try {
         const res = await fetch("http://localhost:5000/api/admin/stats", { credentials: "include" });
         if (!res.ok) {
+          toast.error("Access Denied: Admin privileges required.");
           router.push("/dashboard");
           return;
         }
         setStats(await res.json());
       } catch (err) {
-        console.error(err);
+        console.error("Admin stats error:", err);
+        toast.error("Unable to connect to backend server.");
       } finally {
         setLoading(false);
       }

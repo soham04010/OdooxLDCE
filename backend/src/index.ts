@@ -477,6 +477,10 @@ app.post('/api/trips/:id/copy', requireAuth, async (req: any, res: any) => {
       }
     }
 
+    res.status(201).json(newTrip[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/admin/stats', requireAuth, async (req: any, res: any) => {
   try {
     const adminCheck = await db.select().from(users).where(eq(users.id, req.user.userId));
