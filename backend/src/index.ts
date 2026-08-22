@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
 import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments } from './db/schema';
-import { eq, ilike, and, or, desc, asc, sql } from 'drizzle-orm';
+import { eq, ilike, and, or, desc, asc, sql, inArray } from 'drizzle-orm';
 
 dotenv.config();
 
@@ -212,6 +212,59 @@ app.patch('/api/trips/:id/visibility', requireAuth, async (req: any, res: any) =
     const { isPublic, description } = req.body;
     const updated = await db.update(trips).set({ isPublic, description }).where(eq(trips.id, req.params.id)).returning();
     res.json(updated[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/trips/:id/public', async (req: any, res: any) => {
+  try {
+    const tripData = await db.select().from(trips).where(eq(trips.id, req.params.id));
+    if (!tripData.length || !tripData[0].isPublic) return res.status(404).json({ error: 'Trip not found or not public' });
+    const stops = await db.select().from(tripStops).where(eq(tripStops.tripId, req.params.id)).orderBy(asc(tripStops.orderIndex));
+    const stopIds = stops.map(s => s.id);
+    const acts = stopIds.length > 0 ? await db.select().from(tripActivities).where(inArray(tripActivities.stopId, stopIds)) : [];
+    res.json({ trip: tripData[0], stops, activities: acts });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/trips/:id/clone', requireAuth, async (req: any, res: any) => {
+  try {
+    const tripData = await db.select().from(trips).where(eq(trips.id, req.params.id));
+    if (!tripData.length || !tripData[0].isPublic) return res.status(404).json({ error: 'Trip not found' });
+    
+    // 1. Clone Trip
+    const newTrip = await db.insert(trips).values({
+      userId: req.user.userId,
+      name: `Copy of ${tripData[0].name}`,
+      startDate: tripData[0].startDate,
+      endDate: tripData[0].endDate,
+      coverImage: tripData[0].coverImage,
+      isPublic: false
+    }).returning();
+    
+    // 2. Clone Stops
+    const stops = await db.select().from(tripStops).where(eq(tripStops.tripId, req.params.id));
+    for (const stop of stops) {
+      const newStop = await db.insert(tripStops).values({
+        tripId: newTrip[0].id,
+        cityId: stop.cityId,
+        startDate: stop.startDate,
+        endDate: stop.endDate,
+        budget: stop.budget,
+        orderIndex: stop.orderIndex
+      }).returning();
+      
+      // 3. Clone Activities for this stop
+      const acts = await db.select().from(tripActivities).where(eq(tripActivities.stopId, stop.id));
+      for (const act of acts) {
+        await db.insert(tripActivities).values({
+          stopId: newStop[0].id,
+          activityId: act.activityId,
+          plannedDate: act.plannedDate,
+          orderIndex: act.orderIndex
+        });
+      }
+    }
+    res.json({ tripId: newTrip[0].id });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

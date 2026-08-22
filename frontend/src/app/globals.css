@@ -4,12 +4,64 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ------------------------------------------------------------------ */
+/*  Good Weekend Co. — brand palette                                   */
+/*                                                                     */
+/*  Core four, taken from the logo. These carry the identity:          */
+/*    MARINE  #142b51   navy      — wordmark, headings, primary        */
+/*    WAVE    #376fb7   ocean     — waves, links, focus                */
+/*    SAND    #f0cfac   peach     — the sun disc, warm highlight       */
+/*    CREAM   #f7f6f0   off-white — the ground everything sits on      */
+/*                                                                     */
+/*  Reserve colours. Present as utilities for one-off use, but kept    */
+/*  out of the prominent semantic roles on purpose.                    */
+/*    HIGH SEA #f68620, SHALLOW #a7abb9, DEPTH #0a1536,                */
+/*    HORIZON  #dbe2f0, SHORE   #eae7da, ORCA  #424860                 */
+/*                                                                     */
+/*  Use the semantic tokens (bg-background, text-primary, …) in        */
+/*  components so light and dark both stay correct. Reach for the      */
+/*  named utilities (bg-marine, text-sand, …) only for brand moments.  */
+/* ------------------------------------------------------------------ */
+:root {
+  --marine: #142b51;
+  --wave: #376fb7;
+  --sand: #f0cfac;
+  --cream: #f7f6f0;
+
+  /* Reserve */
+  --high-sea: #f68620;
+  --shallow: #a7abb9;
+  --horizon: #dbe2f0;
+  --shore: #eae7da;
+  --depth: #0a1536;
+  --orca: #424860;
+
+  /* Tints derived from the core four, for surfaces and dividers. */
+  --marine-tint: #5b6885;   /* muted navy — secondary text */
+  --wave-tint: #dfe7f2;     /* palest wave — quiet surfaces */
+  --wave-soft: #7ba3d4;     /* mid wave — charts */
+  --cream-deep: #efede4;    /* recessed cream — muted surfaces */
+  --cream-edge: #e3e0d5;    /* cream border */
+}
+
 @theme inline {
+  /* Named brand utilities: bg-marine, text-sand, border-wave, … */
+  --color-marine: var(--marine);
+  --color-wave: var(--wave);
+  --color-sand: var(--sand);
+  --color-cream: var(--cream);
+  --color-high-sea: var(--high-sea);
+  --color-shallow: var(--shallow);
+  --color-horizon: var(--horizon);
+  --color-shore: var(--shore);
+  --color-depth: var(--depth);
+  --color-orca: var(--orca);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-geist-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,73 +100,103 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ---------------------------- Light ---------------------------- */
+/*  The logo's own composition: navy on cream, white cards, peach and
+    ocean as the two highlights.                                      */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: var(--cream);
+  --foreground: var(--marine);
+
+  --card: #ffffff;
+  --card-foreground: var(--marine);
+  --popover: #ffffff;
+  --popover-foreground: var(--marine);
+
+  --primary: var(--marine);
+  --primary-foreground: var(--cream);
+
+  --secondary: var(--wave-tint);
+  --secondary-foreground: var(--marine);
+
+  --muted: var(--cream-deep);
+  --muted-foreground: var(--marine-tint);
+
+  /* SAND is the warm highlight. Navy sits on it exactly as in the logo —
+     that pairing is ~9:1, comfortably past WCAG AA. */
+  --accent: var(--sand);
+  --accent-foreground: var(--marine);
+
+  --destructive: #b3261e;
+
+  --border: var(--cream-edge);
+  --input: var(--cream-edge);
+  --ring: var(--wave);
+
+  --chart-1: var(--marine);
+  --chart-2: var(--wave);
+  --chart-3: var(--sand);
+  --chart-4: var(--wave-soft);
+  --chart-5: var(--marine-tint);
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --sidebar: var(--cream-deep);
+  --sidebar-foreground: var(--marine);
+  --sidebar-primary: var(--marine);
+  --sidebar-primary-foreground: var(--cream);
+  --sidebar-accent: var(--wave-tint);
+  --sidebar-accent-foreground: var(--marine);
+  --sidebar-border: var(--cream-edge);
+  --sidebar-ring: var(--wave);
 }
 
+/* ---------------------------- Dark ----------------------------- */
+/*  A dark ground needs a colour darker than MARINE, so DEPTH earns its
+    place here even though it stays off the light brand. Same four
+    hues, inverted: navy grounds, WAVE leads, SAND still highlights.  */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: var(--depth);
+  --foreground: #e8ecf4;
+
+  --card: var(--marine);
+  --card-foreground: #e8ecf4;
+  --popover: var(--marine);
+  --popover-foreground: #e8ecf4;
+
+  /* MARINE is too near the background to read as a button, so WAVE
+     carries primary in dark. */
+  --primary: var(--wave);
+  --primary-foreground: #ffffff;
+
+  --secondary: #223059;
+  --secondary-foreground: #e8ecf4;
+
+  --muted: #16244a;
+  --muted-foreground: #9fb0cd;
+
+  --accent: var(--sand);
+  --accent-foreground: var(--marine);
+
+  --destructive: #f2685e;
+
+  --border: #223059;
+  --input: #2a3865;
+  --ring: var(--wave);
+
+  --chart-1: var(--wave);
+  --chart-2: var(--sand);
+  --chart-3: var(--wave-soft);
+  --chart-4: #9fb0cd;
+  --chart-5: var(--horizon);
+
+  --sidebar: var(--marine);
+  --sidebar-foreground: #e8ecf4;
+  --sidebar-primary: var(--wave);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #223059;
+  --sidebar-accent-foreground: #e8ecf4;
+  --sidebar-border: #223059;
+  --sidebar-ring: var(--wave);
 }
 
 @layer base {
@@ -127,4 +209,56 @@
   html {
     @apply font-sans;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Splash screen (route "/")                                          */
+/*                                                                     */
+/*  Timeline:                                                          */
+/*    0.00s  mark + wordmark fade and scale in                         */
+/*    0.45s  mark spins once, and stops                                */
+/*    1.50s  "loading" rises in, dots start cycling                    */
+/*    2.60s  page.tsx redirects                                        */
+/*                                                                     */
+/*  The fade-in sits on .splash-enter and the spin on .splash-mark on   */
+/*  purpose — both animate transform, so on a single element the        */
+/*  spin's `both` fill would override the scale before it ever ran.    */
+/* ------------------------------------------------------------------ */
+@keyframes gw-enter {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes gw-spin-once {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes gw-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes gw-dot {
+  0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+  40%           { opacity: 1;   transform: translateY(-3px); }
+}
+
+.splash-enter { animation: gw-enter 0.45s ease-out both; }
+.splash-mark  { animation: gw-spin-once 1s cubic-bezier(0.65, 0, 0.35, 1) 0.45s 1 both; }
+.splash-load  { animation: gw-rise 0.45s ease-out 1.5s both; }
+
+.splash-dot {
+  display: inline-block;
+  animation: gw-dot 1.4s ease-in-out 1.5s infinite;
+}
+.splash-dot:nth-child(2) { animation-delay: 1.65s; }
+.splash-dot:nth-child(3) { animation-delay: 1.8s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-enter,
+  .splash-mark,
+  .splash-load {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .splash-dot { animation: none; opacity: 0.5; }
 }

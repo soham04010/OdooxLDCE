@@ -1,114 +1,184 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+type City = {
+  id: string;
+  name: string;
+  country: string;
+  region?: string | null;
+  imageUrl?: string | null;
+};
+
+type Country = {
+  country: string;
+  cities: string[];
+};
+
+type ApiError = {
+  error?: string;
+  message?: string;
+};
+
+type CreatedTrip = ApiError & {
+  id?: string;
+};
+
+const fallbackImage =
+  "https://images.unsplash.com/photo-1502602898657-3e91760cbb34";
 
 export default function CreateTripPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
-
-  const [dbCities, setDbCities] = useState<any[]>([]);
-  
-  // External API data
-  const [countriesData, setCountriesData] = useState<any[]>([]);
+  const [name, setName] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
+  const [dbCities, setDbCities] = useState<City[]>([]);
+  const [suggestions, setSuggestions] = useState<City[]>([]);
+  const [countriesData, setCountriesData] = useState<Country[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
   const [loadingCountries, setLoadingCountries] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    // Fetch our DB cities for suggestions
+    let cancelled = false;
+
     const fetchSuggestions = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/cities", {credentials: 'include'});
-        if (res.ok) {
-          const json = await res.json();
-          setDbCities(json.cities || []);
-          setSuggestions((json.cities || []).slice(0, 6));
+        const response = await fetch("http://localhost:5000/api/cities", {
+          credentials: "include",
+        });
+
+        if (response.status === 401) {
+          router.push("/login");
+          return;
         }
-      } catch (e) {
-        console.error(e);
+
+        if (!response.ok) {
+          throw new Error("Could not load city suggestions.");
+        }
+
+        const data = (await response.json()) as { cities?: City[] };
+        if (!cancelled) {
+          const cities = data.cities ?? [];
+          setDbCities(cities);
+          setSuggestions(cities.slice(0, 6));
+        }
+      } catch (fetchError) {
+        console.error(fetchError);
       } finally {
-        setLoadingSuggestions(false);
+        if (!cancelled) setLoadingSuggestions(false);
       }
     };
 
-    // Fetch external countries/cities API
     const fetchCountries = async () => {
       try {
-        const res = await fetch("https://countriesnow.space/api/v0.1/countries");
-        const json = await res.json();
-        setCountriesData(json.data || []);
-      } catch (e) {
-        console.error(e);
+        const response = await fetch(
+          "https://countriesnow.space/api/v0.1/countries"
+        );
+        if (!response.ok) {
+          throw new Error("Could not load countries and cities.");
+        }
+
+        const data = (await response.json()) as { data?: Country[] };
+        if (!cancelled) setCountriesData(data.data ?? []);
+      } catch (fetchError) {
+        console.error(fetchError);
       } finally {
-        setLoadingCountries(false);
+        if (!cancelled) setLoadingCountries(false);
       }
     };
 
-    fetchSuggestions();
-    fetchCountries();
-  }, []);
+    void fetchSuggestions();
+    void fetchCountries();
 
-  const availableCities = countriesData.find(c => c.country === selectedCountry)?.cities || [];
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
-  const handleSuggestionClick = (city: any) => {
-    // If the external API doesn't have the exact spelling, that's fine, we still set it as a string
+  const availableCities =
+    countriesData.find((entry) => entry.country === selectedCountry)?.cities ??
+    [];
+
+  const handleSuggestionClick = (city: City) => {
     setSelectedCountry(city.country);
-    // Give it a tiny delay to allow React to render the newly selected country's cities before setting city
-    setTimeout(() => setSelectedCity(city.name), 10);
+    setSelectedCity(city.name);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
 
-    const formData = new FormData(e.currentTarget);
-    const startDate = formData.get("startDate") as string;
-    const endDate = formData.get("endDate") as string;
-    const tripName = formData.get("name") as string;
+    if (endDate < startDate) {
+      setError("Your end date is before your start date.");
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
-      // 1. Get or Create the City
-      let cityId = "";
-      const existing = dbCities.find(c => 
-        c.name.toLowerCase() === selectedCity.toLowerCase() && 
-        c.country.toLowerCase() === selectedCountry.toLowerCase()
+      // 1. Find the selected city in our database or create it first.
+      const existingCity = dbCities.find(
+        (city) =>
+          city.name.toLowerCase() === selectedCity.toLowerCase() &&
+          city.country.toLowerCase() === selectedCountry.toLowerCase()
       );
 
-      if (existing) {
-        cityId = existing.id;
-      } else {
-        const cityRes = await fetch("http://localhost:5000/api/cities", {
+      let cityId = existingCity?.id;
+
+      if (!cityId) {
+        const cityResponse = await fetch("http://localhost:5000/api/cities", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: selectedCity, country: selectedCountry }),
-          credentials: "include"
+          body: JSON.stringify({
+            name: selectedCity,
+            country: selectedCountry,
+          }),
+          credentials: "include",
         });
-        const cityData = await cityRes.json();
+        const cityData = (await cityResponse.json()) as City & ApiError;
+
+        if (!cityResponse.ok || !cityData.id) {
+          throw new Error(cityData.error || "Could not save the selected city.");
+        }
+
         cityId = cityData.id;
       }
 
-      // 2. Create the Trip
-      const tripRes = await fetch("http://localhost:5000/api/trips", {
+      // 2. Create the trip using the authenticated session cookie.
+      const tripResponse = await fetch("http://localhost:5000/api/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: tripName, startDate, endDate }),
-        credentials: "include"
+        body: JSON.stringify({ name, startDate, endDate }),
+        credentials: "include",
       });
-      const newTrip = await tripRes.json();
+      const newTrip = (await tripResponse.json()) as CreatedTrip;
 
-      // 3. Automatically add the first Stop to the Trip
-      if (tripRes.ok && cityId) {
-        await fetch(`http://localhost:5000/api/trips/${newTrip.id}/stops`, {
+      if (!tripResponse.ok || !newTrip.id) {
+        throw new Error(newTrip.error || "Could not create the trip.");
+      }
+
+      // 3. Add the selected city as the trip's first stop.
+      const stopResponse = await fetch(
+        `http://localhost:5000/api/trips/${newTrip.id}/stops`,
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -116,111 +186,154 @@ export default function CreateTripPage() {
             orderIndex: 0,
             startDate,
             endDate,
-            budget: 0
+            budget: 0,
           }),
-          credentials: "include"
-        });
-        
-        // 4. Redirect to itinerary builder
-        router.push(`/trips/${newTrip.id}`);
+          credentials: "include",
+        }
+      );
+
+      if (!stopResponse.ok) {
+        const stopError = (await stopResponse.json()) as ApiError;
+        throw new Error(stopError.error || "Could not add the first stop.");
       }
 
-    } catch (e) {
-      console.error(e);
-      setIsLoading(false);
+      // 4. Continue to the itinerary builder for the new trip.
+      router.push(`/trips/${newTrip.id}`);
+    } catch (submitError) {
+      console.error(submitError);
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "That did not save. Please try again."
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background font-sans">
       <Navbar />
-      
-      <main className="container mx-auto px-4 py-8 max-w-5xl">
-        <h1 className="text-2xl font-bold mb-6">Create a new Trip</h1>
 
-        <Card className="shadow-sm border border-border/50 mb-10">
-          <CardHeader className="border-b bg-muted/20 pb-4">
-            <CardTitle className="text-lg">Plan a new trip</CardTitle>
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight">
+          Create a new Trip
+        </h1>
+
+        <Card className="mb-10 gap-0 border border-border/50 py-0 shadow-sm">
+          <CardHeader className="border-b bg-muted/20 px-6 py-4">
+            <CardTitle className="text-lg font-bold">Plan a new trip</CardTitle>
           </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              
-              <div className="grid grid-cols-[150px_1fr] items-center gap-4">
-                <Label htmlFor="name" className="text-right text-muted-foreground font-medium">Trip Name:</Label>
-                <Input 
-                  id="name" 
-                  name="name" 
-                  placeholder="e.g. Euro Summer" 
-                  required 
-                  className="max-w-md"
-                />
-              </div>
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-md bg-destructive/10 p-3 text-sm font-medium text-destructive"
+                >
+                  {error}
+                </p>
+              )}
 
-              <div className="grid grid-cols-[150px_1fr] items-start gap-4">
-                <Label className="text-right text-muted-foreground font-medium mt-3">Select a Place:</Label>
-                <div className="max-w-md flex flex-col gap-2">
-                  <select 
-                    value={selectedCountry} 
-                    onChange={e => { setSelectedCountry(e.target.value); setSelectedCity(""); }} 
-                    required 
-                    className="w-full h-10 px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              <Field label="Trip Name:" htmlFor="name">
+                <Input
+                  id="name"
+                  name="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Euro Summer"
+                  required
+                  className="h-11 max-w-md"
+                />
+              </Field>
+
+              <Field label="Select a Place:" htmlFor="country">
+                <div className="flex max-w-md flex-col gap-2">
+                  <select
+                    id="country"
+                    name="country"
+                    value={selectedCountry}
+                    onChange={(event) => {
+                      setSelectedCountry(event.target.value);
+                      setSelectedCity("");
+                    }}
+                    required
                     disabled={loadingCountries}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="">{loadingCountries ? "Loading countries..." : "Select Country..."}</option>
-                    {countriesData.map((c: any) => (
-                      <option key={c.country} value={c.country}>{c.country}</option>
+                    <option value="">
+                      {loadingCountries
+                        ? "Loading countries..."
+                        : "Select Country..."}
+                    </option>
+                    {countriesData.map((country) => (
+                      <option key={country.country} value={country.country}>
+                        {country.country}
+                      </option>
                     ))}
-                    {/* Fallback if the suggestion country isn't perfectly mapped */}
-                    {selectedCountry && !countriesData.some(c => c.country === selectedCountry) && (
-                       <option value={selectedCountry}>{selectedCountry}</option>
-                    )}
+                    {selectedCountry &&
+                      !countriesData.some(
+                        (country) => country.country === selectedCountry
+                      ) && (
+                        <option value={selectedCountry}>{selectedCountry}</option>
+                      )}
                   </select>
-                  
-                  <select 
-                    value={selectedCity} 
-                    onChange={e => setSelectedCity(e.target.value)} 
-                    required 
-                    className="w-full h-10 px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+
+                  <select
+                    id="city"
+                    name="city"
+                    value={selectedCity}
+                    onChange={(event) => setSelectedCity(event.target.value)}
+                    required
                     disabled={!selectedCountry}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">Select City...</option>
-                    {availableCities.map((city: string) => (
-                      <option key={city} value={city}>{city}</option>
+                    {availableCities.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
                     ))}
-                    {/* Fallback if the suggestion city isn't perfectly mapped */}
-                    {selectedCity && !availableCities.includes(selectedCity) && (
-                       <option value={selectedCity}>{selectedCity}</option>
-                    )}
+                    {selectedCity &&
+                      !availableCities.includes(selectedCity) && (
+                        <option value={selectedCity}>{selectedCity}</option>
+                      )}
                   </select>
                 </div>
-              </div>
+              </Field>
 
-              <div className="grid grid-cols-[150px_1fr] items-center gap-4">
-                <Label htmlFor="startDate" className="text-right text-muted-foreground font-medium">Start Date:</Label>
-                <Input 
-                  id="startDate" 
-                  name="startDate" 
-                  type="date" 
-                  required 
-                  className="max-w-[200px]"
+              <Field label="Start Date:" htmlFor="startDate">
+                <Input
+                  id="startDate"
+                  name="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  required
+                  className="h-11 max-w-[220px]"
                 />
-              </div>
+              </Field>
 
-              <div className="grid grid-cols-[150px_1fr] items-center gap-4">
-                <Label htmlFor="endDate" className="text-right text-muted-foreground font-medium">End Date:</Label>
-                <Input 
-                  id="endDate" 
-                  name="endDate" 
-                  type="date" 
-                  required 
-                  className="max-w-[200px]"
+              <Field label="End Date:" htmlFor="endDate">
+                <Input
+                  id="endDate"
+                  name="endDate"
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  required
+                  className="h-11 max-w-[220px]"
                 />
-              </div>
+              </Field>
 
-              <div className="grid grid-cols-[150px_1fr] items-center gap-4 pt-4">
-                <div />
-                <Button type="submit" disabled={isLoading || !selectedCity} className="max-w-[200px]">
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <div className="flex justify-end pt-1 sm:pl-[176px] sm:justify-start">
+                <Button
+                  type="submit"
+                  disabled={isSaving || !selectedCity}
+                  className="h-11 w-full gap-2 px-6 text-base sm:w-auto sm:min-w-40"
+                >
+                  {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                   Save Trip
                 </Button>
               </div>
@@ -228,40 +341,94 @@ export default function CreateTripPage() {
           </CardContent>
         </Card>
 
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-4">Suggestion for Places to Visit/Activites to preform</h2>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+        <section aria-labelledby="suggestions-heading">
+          <h2
+            id="suggestions-heading"
+            className="mb-4 text-lg font-semibold tracking-tight"
+          >
+            Suggestions for places to visit and activities to perform
+          </h2>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
             {loadingSuggestions ? (
-               Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-lg" />)
+              Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-40 rounded-xl" />
+              ))
             ) : suggestions.length > 0 ? (
-               suggestions.map((city) => (
-                 <Card 
-                   key={city.id} 
-                   onClick={() => handleSuggestionClick(city)}
-                   className="overflow-hidden h-40 relative group cursor-pointer border-primary/20 hover:border-primary transition-colors"
-                 >
-                    <img 
-                      src={city.imageUrl || `https://images.unsplash.com/photo-1502602898657-3e91760cbb34`} 
-                      alt={city.name} 
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              suggestions.map((city) => {
+                const selected =
+                  selectedCountry === city.country &&
+                  selectedCity === city.name;
+
+                return (
+                  <button
+                    key={city.id}
+                    type="button"
+                    onClick={() => handleSuggestionClick(city)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "group relative h-40 overflow-hidden rounded-xl border bg-card text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-44",
+                      selected
+                        ? "border-primary ring-2 ring-primary/30"
+                        : "border-primary/20 hover:border-primary hover:shadow-md"
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={city.imageUrl || fallbackImage}
+                      alt={`${city.name}, ${city.country}`}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                    <div className="absolute bottom-3 left-3 text-white">
-                      <h3 className="font-bold">{city.name}</h3>
-                      <p className="text-xs text-gray-200">{city.country}</p>
-                    </div>
-                 </Card>
-               ))
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-black/40 transition-colors group-hover:bg-black/25"
+                    />
+                    {selected && (
+                      <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                        <Check className="h-4 w-4" />
+                      </span>
+                    )}
+                    <span className="absolute bottom-3 left-3 right-3 text-white">
+                      <span className="block truncate font-bold">
+                        {city.name}
+                      </span>
+                      <span className="block truncate text-xs text-gray-200">
+                        {city.country}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
             ) : (
-               <div className="col-span-full text-center text-muted-foreground py-8 border rounded-lg border-dashed">
-                 No suggestions available.
-               </div>
+              <div className="col-span-full rounded-lg border border-dashed py-8 text-center text-muted-foreground">
+                No suggestions available.
+              </div>
             )}
           </div>
-        </div>
-
+        </section>
       </main>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center sm:gap-4">
+      <Label
+        htmlFor={htmlFor}
+        className="text-sm font-medium text-muted-foreground sm:text-right"
+      >
+        {label}
+      </Label>
+      {children}
     </div>
   );
 }
