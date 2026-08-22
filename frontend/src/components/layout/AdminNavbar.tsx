@@ -6,9 +6,20 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 
 export function AdminNavbar() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch {}
+    }
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -40,16 +51,31 @@ export function AdminNavbar() {
             variant="outline" 
             size="sm" 
             onClick={() => router.push("/dashboard")}
-            className="text-xs font-medium gap-1.5 h-9"
+            className="text-xs font-medium gap-1.5 h-9 mr-1"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to App
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={() => router.push("/profile")} title="Profile">
-            <User className="h-4 w-4" />
-          </Button>
+          <button
+            onClick={() => router.push("/profile")}
+            className="flex items-center gap-2 rounded-full p-1 pr-3 hover:bg-muted/60 transition-colors border border-border/80 group"
+            title="View Profile"
+          >
+            <div className="w-7 h-7 rounded-full bg-marine text-white flex items-center justify-center font-bold text-xs shadow-2xs group-hover:scale-105 transition-transform overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user?.name || "User"} className="w-full h-full object-cover" />
+              ) : (
+                <span>{user?.name ? user.name.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}</span>
+              )}
+            </div>
+            <span className="text-xs font-semibold text-marine dark:text-foreground max-w-[100px] truncate hidden sm:inline-block">
+              {user?.name || "Profile"}
+            </span>
+          </button>
+
           <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
-            <LogOut className="h-4 w-4 text-destructive" />
+            <LogOut className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+            <span className="sr-only">Logout</span>
           </Button>
         </div>
       </div>

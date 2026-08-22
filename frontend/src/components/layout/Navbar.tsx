@@ -10,12 +10,14 @@ import { useEffect, useState } from "react";
 export function Navbar() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (userStr) {
       try {
         const u = JSON.parse(userStr);
+        setUser(u);
         if (u.role === "admin") setIsAdmin(true);
       } catch {
         // Ignore invalid stored user data.
@@ -78,15 +80,29 @@ export function Navbar() {
 
         <div className="ml-auto flex shrink-0 items-center space-x-2">
           <Button variant="ghost" size="icon" onClick={() => router.push("/inbox")} title="Inbox & Invitations">
-            <MessageSquare className="h-5 w-5" />
+            <MessageSquare className="h-5 w-5 text-muted-foreground hover:text-foreground" />
             <span className="sr-only">Inbox</span>
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => router.push("/profile")}>
-            <User className="h-5 w-5" />
-            <span className="sr-only">Profile</span>
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleLogout}>
-            <LogOut className="h-5 w-5" />
+
+          <button
+            onClick={() => router.push("/profile")}
+            className="flex items-center gap-2 rounded-full p-1 pr-3 hover:bg-muted/60 transition-colors border border-border/80 group"
+            title="View Profile"
+          >
+            <div className="w-7 h-7 rounded-full bg-marine text-white flex items-center justify-center font-bold text-xs shadow-2xs group-hover:scale-105 transition-transform overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user?.name || "User"} className="w-full h-full object-cover" />
+              ) : (
+                <span>{user?.name ? user.name.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}</span>
+              )}
+            </div>
+            <span className="text-xs font-semibold text-marine dark:text-foreground max-w-[100px] truncate hidden sm:inline-block">
+              {user?.name || "Profile"}
+            </span>
+          </button>
+
+          <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+            <LogOut className="h-4 w-4 text-muted-foreground hover:text-destructive" />
             <span className="sr-only">Logout</span>
           </Button>
         </div>
