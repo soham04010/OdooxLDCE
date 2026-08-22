@@ -34,7 +34,12 @@ export default function LoginPage() {
       if (!res.ok) throw new Error(json.error || "Authentication failed");
 
       localStorage.setItem("user", JSON.stringify(json.user));
-      router.push("/dashboard");
+      
+      if (json.user.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

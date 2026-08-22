@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
 import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments } from './db/schema';
-import { eq, ilike, and, or, desc, asc } from 'drizzle-orm';
+import { eq, ilike, and, or, desc, asc, sql } from 'drizzle-orm';
 
 dotenv.config();
 
@@ -45,7 +45,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const token = jwt.sign({ userId: newUser[0].id }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
-    res.status(201).json({ user: { id: newUser[0].id, name: newUser[0].name, email: newUser[0].email } });
+    res.status(201).json({ user: { id: newUser[0].id, name: newUser[0].name, email: newUser[0].email, role: newUser[0].role, avatarUrl: newUser[0].avatarUrl } });
   } catch (err) { res.status(500).json({ error: 'Registration failed' }); }
 });
 
@@ -58,7 +58,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const token = jwt.sign({ userId: found[0].id }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
-    res.json({ user: { id: found[0].id, name: found[0].name, email: found[0].email } });
+    res.json({ user: { id: found[0].id, name: found[0].name, email: found[0].email, role: found[0].role, avatarUrl: found[0].avatarUrl } });
   } catch (err) { res.status(500).json({ error: 'Login failed' }); }
 });
 
@@ -207,7 +207,7 @@ app.get('/api/search', async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-app.patch('/api/trips/:id/publish', requireAuth, async (req: any, res: any) => {
+app.patch('/api/trips/:id/visibility', requireAuth, async (req: any, res: any) => {
   try {
     const { isPublic, description } = req.body;
     const updated = await db.update(trips).set({ isPublic, description }).where(eq(trips.id, req.params.id)).returning();
@@ -225,6 +225,21 @@ app.get('/api/dashboard', requireAuth, async (req: any, res: any) => {
 app.get('/api/cities', requireAuth, async (req: any, res: any) => {
   const results = await db.select().from(cities);
   res.json({ cities: results });
+});
+
+app.get('/api/activities', requireAuth, async (req: any, res: any) => {
+  try {
+    const { cityId } = req.query;
+    let results;
+    if (cityId) {
+      results = await db.select().from(activities).where(eq(activities.cityId, cityId as string));
+    } else {
+      results = await db.select().from(activities);
+    }
+    res.json({ activities: results });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch activities' });
+  }
 });
 
 app.post('/api/cities', requireAuth, async (req: any, res: any) => {
@@ -376,4 +391,43 @@ app.post('/api/stops/:stopId/activities', requireAuth, async (req: any, res: any
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-app.listen(port, () => console.log(`API running on ${port}`));
+app.get('/api/admin/stats', requireAuth, async (req: any, res: any) => {
+  try {
+    const adminCheck = await db.select().from(users).where(eq(users.id, req.user.userId));
+    if (!adminCheck.length || adminCheck[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const totalUsers = await db.select({ count: sql`count(*)` }).from(users);
+    const totalTrips = await db.select({ count: sql`count(*)` }).from(trips);
+    const totalPosts = await db.select({ count: sql`count(*)` }).from(posts);
+    
+    const userList = await db.select({
+      id: users.id, name: users.name, email: users.email, avatarUrl: users.avatarUrl,
+      tripCount: sql`(SELECT COUNT(*) FROM trips WHERE trips.user_id = users.id)`,
+      postCount: sql`(SELECT COUNT(*) FROM posts WHERE posts.user_id = users.id)`
+    }).from(users).orderBy(desc(sql`(SELECT COUNT(*) FROM trips WHERE trips.user_id = users.id)`));
+
+    const popCities = await db.select({
+      cityId: cities.id, name: cities.name, imageUrl: cities.imageUrl,
+      visitCount: sql`count(${tripStops.id})`
+    }).from(cities).leftJoin(tripStops, eq(tripStops.cityId, cities.id))
+    .groupBy(cities.id, cities.name, cities.imageUrl).orderBy(desc(sql`count(${tripStops.id})`)).limit(10);
+
+    const popActivities = await db.select({
+      activityId: activities.id, name: activities.name, type: activities.type,
+      bookingCount: sql`count(${tripActivities.id})`
+    }).from(activities).leftJoin(tripActivities, eq(tripActivities.activityId, activities.id))
+    .groupBy(activities.id, activities.name, activities.type).orderBy(desc(sql`count(${tripActivities.id})`)).limit(10);
+
+    res.json({
+      totals: { users: totalUsers[0].count, trips: totalTrips[0].count, posts: totalPosts[0].count },
+      users: userList,
+      popularCities: popCities,
+      popularActivities: popActivities
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});

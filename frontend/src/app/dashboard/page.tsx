@@ -17,14 +17,24 @@ export default function DashboardPage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (!storedUser) {
-      router.push("/login");
-      return;
-    }
-    setUser(JSON.parse(storedUser));
+    const checkAuth = async () => {
+      const u = localStorage.getItem("user");
+      if (!u) {
+        router.push("/login");
+        return;
+      }
+      try {
+        const parsed = JSON.parse(u);
+        if (parsed.role === "admin") {
+          router.push("/admin");
+          return;
+        }
+        setUser(parsed);
+      } catch (e) {
+        router.push("/login");
+        return;
+      }
 
-    const fetchDashboard = async () => {
       try {
         const res = await fetch("http://localhost:5000/api/dashboard", {credentials: 'include'});
         if (res.ok) {
@@ -40,7 +50,7 @@ export default function DashboardPage() {
         setLoading(false);
       }
     };
-    fetchDashboard();
+    checkAuth();
   }, [router]);
 
   if (!user) return null;

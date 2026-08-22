@@ -195,15 +195,20 @@ export default function BuildItineraryPage() {
             <Button 
               variant={data.trip.isPublic ? "secondary" : "default"} 
               onClick={async () => {
-                const res = await fetch(`http://localhost:5000/api/trips/${tripId}/publish`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ isPublic: !data.trip.isPublic, description: data.trip.description || "My amazing trip!" }),
-                  credentials: "include"
-                });
-                if (res.ok) {
-                  fetchTrip();
-                  alert(data.trip.isPublic ? "Trip made private." : "Trip published to community!");
+                try {
+                  const res = await fetch(`http://localhost:5000/api/trips/${tripId}/visibility`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ isPublic: !data.trip.isPublic, description: data.trip.description || "My amazing trip!" }),
+                    credentials: "include"
+                  });
+                  if (res.ok) {
+                    fetchTrip();
+                    alert(data.trip.isPublic ? "Trip made private." : "Trip published to community!");
+                  }
+                } catch (err) {
+                  console.error("Fetch failed, likely blocked by adblocker:", err);
+                  alert("Failed to update visibility. If you are using Brave or an Adblocker, try turning shields down.");
                 }
               }}
             >

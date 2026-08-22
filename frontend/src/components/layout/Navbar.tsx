@@ -5,8 +5,21 @@ import { Command, User, Map, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 
+import { useEffect, useState } from "react";
+
 export function Navbar() {
   const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u.role === "admin") setIsAdmin(true);
+      } catch (e) {}
+    }
+  }, []);
   
   const handleLogout = async () => {
     try {
@@ -30,6 +43,9 @@ export function Navbar() {
           <Link href="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">
             Dashboard
           </Link>
+          <Link href="/discover" className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground">
+            Discover
+          </Link>
           <Link href="/trips" className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground">
             My Trips
           </Link>
@@ -39,6 +55,11 @@ export function Navbar() {
           <Link href="/calendar" className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground">
             Calendar
           </Link>
+          {isAdmin && (
+            <Link href="/admin" className="text-sm font-bold hover:text-primary transition-colors text-primary border border-primary/20 bg-primary/10 px-3 py-1 rounded-full">
+              Admin Panel
+            </Link>
+          )}
         </div>
         </div>
         <div className="ml-auto flex items-center space-x-2">
