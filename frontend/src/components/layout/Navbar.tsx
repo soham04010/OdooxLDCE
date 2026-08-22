@@ -51,10 +51,7 @@ export function Navbar() {
               Dashboard
             </Link>
             <Link href="/explore" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
-              Explore & Search
-            </Link>
-            <Link href="/discover" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
-              Discover
+              Explore & Discover
             </Link>
             <Link href="/trips" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
               My Trips
