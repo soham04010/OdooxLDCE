@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments, tripMembers } from './db/schema';
+import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments, tripMembers, invitations, tripMessages } from './db/schema';
 import { eq, ilike, and, or, desc, asc, sql, inArray } from 'drizzle-orm';
 
 dotenv.config();
@@ -382,7 +382,7 @@ app.get('/api/community/trips', async (req: any, res: any) => {
   res.json(publicTrips);
 });
 
-// Auto-migrate trip_members table and paid_by_member_name column
+// Auto-migrate tables for members, invitations, and chat
 db.execute(sql`
   CREATE TABLE IF NOT EXISTS trip_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -393,6 +393,25 @@ db.execute(sql`
     created_at TIMESTAMP DEFAULT NOW()
   );
   ALTER TABLE trip_activities ADD COLUMN IF NOT EXISTS paid_by_member_name VARCHAR(120);
+
+  CREATE TABLE IF NOT EXISTS invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES users(id),
+    sender_name VARCHAR(120) NOT NULL,
+    receiver_email VARCHAR(160) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS trip_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES users(id),
+    sender_name VARCHAR(120) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
 `).catch((err) => console.log('Auto migration note:', err.message));
 
 app.get('/api/trips/:id', requireAuth, async (req: any, res: any) => {
@@ -430,6 +449,83 @@ app.get('/api/trips/:id', requireAuth, async (req: any, res: any) => {
   }
 });
 
+// --- INBOX & CHAT ENDPOINTS ---
+app.get('/api/inbox/invitations', requireAuth, async (req: any, res: any) => {
+  try {
+    const userObj = await db.select().from(users).where(eq(users.id, req.user.userId));
+    const userEmail = userObj[0]?.email || '';
+
+    const list = await db.select({
+      invitation: invitations,
+      trip: trips
+    })
+    .from(invitations)
+    .leftJoin(trips, eq(invitations.tripId, trips.id))
+    .where(or(eq(invitations.receiverEmail, userEmail), eq(invitations.receiverEmail, req.user.userId)))
+    .orderBy(desc(invitations.createdAt));
+
+    res.json(list);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/inbox/invitations/:id/respond', requireAuth, async (req: any, res: any) => {
+  try {
+    const { status } = req.body; // 'accepted' | 'declined'
+    const inv = await db.select().from(invitations).where(eq(invitations.id, req.params.id));
+    if (!inv.length) return res.status(404).json({ error: 'Invitation not found' });
+
+    await db.update(invitations).set({ status }).where(eq(invitations.id, req.params.id));
+
+    if (status === 'accepted') {
+      const userObj = await db.select().from(users).where(eq(users.id, req.user.userId));
+      const userName = userObj[0]?.name || 'Member';
+      await db.insert(tripMembers).values({
+        tripId: inv[0].tripId,
+        name: userName,
+        email: inv[0].receiverEmail,
+        role: 'member'
+      });
+    }
+
+    res.json({ success: true, status });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Trip Chat Messages
+app.get('/api/trips/:id/messages', requireAuth, async (req: any, res: any) => {
+  try {
+    const msgs = await db.select().from(tripMessages).where(eq(tripMessages.tripId, req.params.id)).orderBy(asc(tripMessages.createdAt));
+    res.json(msgs);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/trips/:id/messages', requireAuth, async (req: any, res: any) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Message content required' });
+
+    const userObj = await db.select().from(users).where(eq(users.id, req.user.userId));
+    const senderName = userObj[0]?.name || 'Traveler';
+
+    const newMsg = await db.insert(tripMessages).values({
+      tripId: req.params.id,
+      senderId: req.user.userId,
+      senderName,
+      content: content.trim()
+    }).returning();
+
+    res.status(201).json(newMsg[0]);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- TRIP MEMBERS & SPLIT ---
 app.post('/api/trips/:id/members', requireAuth, async (req: any, res: any) => {
   try {
@@ -441,6 +537,19 @@ app.post('/api/trips/:id/members', requireAuth, async (req: any, res: any) => {
       email: email || null,
       role: role || 'member'
     }).returning();
+
+    if (email) {
+      const userObj = await db.select().from(users).where(eq(users.id, req.user.userId));
+      const senderName = userObj[0]?.name || 'A traveler';
+      await db.insert(invitations).values({
+        tripId: req.params.id,
+        senderId: req.user.userId,
+        senderName,
+        receiverEmail: email.trim(),
+        status: 'pending'
+      });
+    }
+
     res.status(201).json(newMember[0]);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

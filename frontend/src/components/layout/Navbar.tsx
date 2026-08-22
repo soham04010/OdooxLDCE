@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/logo";
@@ -62,6 +62,9 @@ export function Navbar() {
             <Link href="/calendar" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
               Calendar
             </Link>
+            <Link href="/inbox" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center gap-1">
+              Inbox & Chat
+            </Link>
             {isAdmin && (
               <Link
                 href="/admin"
@@ -74,6 +77,10 @@ export function Navbar() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center space-x-2">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/inbox")} title="Inbox & Invitations">
+            <MessageSquare className="h-5 w-5" />
+            <span className="sr-only">Inbox</span>
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => router.push("/profile")}>
             <User className="h-5 w-5" />
             <span className="sr-only">Profile</span>

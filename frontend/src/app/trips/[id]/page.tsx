@@ -358,6 +358,10 @@ export default function BuildItineraryPage() {
                   <Share2 className="w-4 h-4 mr-2" /> Share Link
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setIsInviteModalOpen(true)} className="font-semibold text-xs gap-1.5">
+                <UserPlus className="w-4 h-4 text-wave" />
+                Invite Friends
+              </Button>
               <Button variant="outline" size="sm" onClick={handleCopyTrip} disabled={copying}>
                 {copying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Copy className="w-4 h-4 mr-2" />}
                 Copy Trip

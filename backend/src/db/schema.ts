@@ -81,6 +81,25 @@ export const tripMembers = pgTable("trip_members", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const invitations = pgTable("invitations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tripId: uuid("trip_id").references(() => trips.id, { onDelete: "cascade" }).notNull(),
+  senderId: uuid("sender_id").references(() => users.id).notNull(),
+  senderName: varchar("sender_name", { length: 120 }).notNull(),
+  receiverEmail: varchar("receiver_email", { length: 160 }).notNull(),
+  status: varchar("status", { length: 20 }).default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const tripMessages = pgTable("trip_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tripId: uuid("trip_id").references(() => trips.id, { onDelete: "cascade" }).notNull(),
+  senderId: uuid("sender_id").references(() => users.id).notNull(),
+  senderName: varchar("sender_name", { length: 120 }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const posts = pgTable("posts", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").references(() => users.id).notNull(),
