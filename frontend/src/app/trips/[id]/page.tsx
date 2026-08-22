@@ -9,16 +9,13 @@ import { Plus, X, Loader2, Calendar, PieChart as PieIcon, List, Share2, Copy, Ma
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-<<<<<<< HEAD
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
-=======
 import dynamic from "next/dynamic";
 
 const DynamicBudgetChart = dynamic(() => import("@/components/TripBudgetChart"), { ssr: false });
->>>>>>> origin/main
 
 const CURRENCY_MAP: Record<string, string> = {
   'United States': '$', 'USA': '$', 'India': '₹', 'United Kingdom': '£',
@@ -311,7 +308,6 @@ export default function BuildItineraryPage() {
         ) : !data ? (
           <div className="text-center py-20 text-muted-foreground border border-dashed rounded-xl">Trip not found or unauthorized</div>
         ) : (
-<<<<<<< HEAD
           <div className="space-y-6">
             
             {/* Overview Card */}
@@ -383,26 +379,6 @@ export default function BuildItineraryPage() {
                 ) : (
                   data.stops.map((stopItem: any, index: number) => {
                     const sectionSpent = stopItem.activities.reduce((sum: number, act: any) => sum + Number(act.item.costOverride || act.activity.cost || 0), 0);
-=======
-          <div className="space-y-8">
-            <DynamicBudgetChart data={data} currency={mainCurrency} />
-            {data.stops.length === 0 ? (
-               <Card className="border border-border text-center py-12 shadow-sm">
-                 <h2 className="text-xl font-bold mb-2">No Sections Added</h2>
-                 <p className="text-muted-foreground mb-4">You haven't added any stops (sections) to this trip yet.</p>
-               </Card>
-            ) : (
-              data.stops.map((stopItem: any, index: number) => {
-                const sectionSpent = stopItem.activities.reduce((sum: number, act: any) => sum + Number(act.item.costOverride || act.activity.cost || 0), 0);
-                
-                return (
-                <Card key={stopItem.stop.id} className="border border-border/80 shadow-sm">
-                  <CardContent className="p-6">
-                    <h3 className="font-bold text-lg mb-2">Section {index + 1}: {stopItem.city.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-6">
-                      All the necessary information about this section. This can be anything like travel section, hotel or any other activity.
-                    </p>
->>>>>>> origin/main
                     
                     return (
                       <Card key={stopItem.stop.id} className="border border-border/80 shadow-sm hover:border-wave/50 transition-colors">
