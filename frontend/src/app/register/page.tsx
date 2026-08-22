@@ -6,8 +6,16 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Command } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -21,100 +29,162 @@ export default function RegisterPage() {
 
     const formData = new FormData(e.currentTarget);
     const data = Object.fromEntries(formData.entries());
-    
-    // Combine first and last name for the backend
+
+    // The API stores one name while the form keeps first and last names usable.
     const payload = {
       ...data,
       name: `${data.firstName} ${data.lastName}`,
     };
 
     try {
-      const res = await fetch(`http://localhost:5000/api/auth/register`, {
+      const res = await fetch("http://localhost:5000/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        credentials: "include"
+        credentials: "include",
       });
 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Authentication failed");
 
-      // In this version, cookie is set automatically via httpOnly, but we save user to local storage for quick UI reference
+      if (json.token) {
+        localStorage.setItem("token", json.token);
+      } else {
+        localStorage.removeItem("token");
+      }
       localStorage.setItem("user", JSON.stringify(json.user));
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-secondary via-background to-background p-4 dark:from-card dark:via-background dark:to-background">
       <div className="z-10 w-full max-w-lg">
-        <div className="flex justify-center mb-6">
-          <div className="flex items-center gap-2 font-bold text-2xl tracking-tighter">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-              <Command className="h-6 w-6" />
-            </div>
-            Globe<span className="text-primary">Trotter</span>
-          </div>
+        <div className="mb-8 flex justify-center">
+          <Logo />
         </div>
 
-        <Card className="border shadow-sm">
-          <CardHeader className="space-y-2 text-center pb-6">
-            <CardTitle className="text-2xl font-semibold tracking-tight">Create an account</CardTitle>
-            <CardDescription>Enter your details below to get started</CardDescription>
+        <Card className="border-border/50 shadow-xl shadow-black/5 backdrop-blur-sm">
+          <CardHeader className="space-y-2 pb-6 text-center">
+            <CardTitle className="text-2xl font-semibold tracking-tight">
+              Create an account
+            </CardTitle>
+            <CardDescription>
+              Enter your details below to get started
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleRegister}>
               <div className="grid gap-5">
                 {error && (
-                  <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950/50 rounded-md text-center font-medium">
+                  <div
+                    className="rounded-md bg-destructive/10 p-3 text-center text-sm font-medium text-destructive"
+                    role="alert"
+                  >
                     {error}
                   </div>
                 )}
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" name="firstName" placeholder="John" required className="h-11" />
+                    <Input
+                      id="firstName"
+                      name="firstName"
+                      placeholder="John"
+                      autoComplete="given-name"
+                      required
+                      className="h-11"
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" name="lastName" placeholder="Doe" required className="h-11" />
+                    <Input
+                      id="lastName"
+                      name="lastName"
+                      placeholder="Doe"
+                      autoComplete="family-name"
+                      required
+                      className="h-11"
+                    />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" name="email" placeholder="name@example.com" type="email" required className="h-11" />
+                    <Input
+                      id="email"
+                      name="email"
+                      placeholder="name@example.com"
+                      type="email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect="off"
+                      required
+                      className="h-11"
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" name="phone" placeholder="+1 234 567 890" className="h-11" />
+                    <Input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="+1 234 567 890"
+                      autoComplete="tel"
+                      className="h-11"
+                    />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="city">City</Label>
-                    <Input id="city" name="city" placeholder="New York" className="h-11" />
+                    <Input
+                      id="city"
+                      name="city"
+                      placeholder="New York"
+                      autoComplete="address-level2"
+                      className="h-11"
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="country">Country</Label>
-                    <Input id="country" name="country" placeholder="USA" className="h-11" />
+                    <Input
+                      id="country"
+                      name="country"
+                      placeholder="USA"
+                      autoComplete="country-name"
+                      className="h-11"
+                    />
                   </div>
                 </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" name="password" type="password" required className="h-11" />
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    className="h-11"
+                  />
                 </div>
-                
-                <Button type="submit" disabled={isLoading} className="w-full h-11 text-base mt-2">
-                  {isLoading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="mt-2 h-11 w-full text-base"
+                >
+                  {isLoading && (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  )}
                   Register Now
                 </Button>
               </div>
@@ -123,7 +193,10 @@ export default function RegisterPage() {
           <CardFooter className="flex flex-col gap-4 border-t pt-6 text-center">
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link href="/login" className="font-medium text-primary hover:underline underline-offset-4">
+              <Link
+                href="/login"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
                 Sign in here
               </Link>
             </p>
