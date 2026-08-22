@@ -64,9 +64,6 @@ export function Navbar() {
             <Link href="/calendar" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
               Calendar
             </Link>
-            <Link href="/inbox" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center gap-1">
-              Inbox & Chat
-            </Link>
             {isAdmin && (
               <Link
                 href="/admin"
