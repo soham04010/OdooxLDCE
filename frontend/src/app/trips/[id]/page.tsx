@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, X, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/date-picker";
 import { Label } from "@/components/ui/label";
 import dynamic from "next/dynamic";
 
@@ -361,7 +362,7 @@ export default function BuildItineraryPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Date</Label>
-                    <Input name="date" type="date" required />
+                    <DatePicker name="date" required placeholder="Pick a date" />
                   </div>
                   <div className="space-y-2">
                     <Label>Start Time (Optional)</Label>
@@ -485,11 +486,11 @@ function AddStopForm({ tripId, cities, onSuccess }: { tripId: string, cities: an
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Start Date</Label>
-          <Input name="startDate" type="date" required />
+          <DatePicker name="startDate" required placeholder="Start date" />
         </div>
         <div className="space-y-2">
           <Label>End Date</Label>
-          <Input name="endDate" type="date" required />
+          <DatePicker name="endDate" required placeholder="End date" />
         </div>
       </div>
 

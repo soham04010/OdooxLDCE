@@ -87,7 +87,7 @@ export function HeroSlider({ firstName }: { firstName: string }) {
             href="/trips/new"
             className={cn(
               buttonVariants(),
-              "mt-2 h-11 gap-1.5 bg-accent px-5 text-base text-accent-foreground hover:bg-accent/90"
+              "btn-glow mt-2 h-11 gap-1.5 bg-accent px-5 text-base text-accent-foreground hover:bg-accent/90"
             )}
           >
             <Plus className="h-4 w-4" />

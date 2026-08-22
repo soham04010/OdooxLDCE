@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Search, MapPin, Navigation, Clock, ChevronRight, Compass, Star, TrendingUp, Sparkles, Map } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Reveal } from "@/components/reveal";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function DiscoverPage() {
@@ -17,6 +18,8 @@ export default function DiscoverPage() {
   const [selectedCity, setSelectedCity] = useState<any | null>(null);
   const [cityActivities, setCityActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  // Some seeded cities have an image_url that 404s; fall back to the placeholder.
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchCities = async () => {
@@ -122,24 +125,34 @@ export default function DiscoverPage() {
             <div className="w-24 h-24 bg-zinc-100 dark:bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-6">
               <Compass className="w-12 h-12 text-zinc-300 dark:text-zinc-700" />
             </div>
-            <h3 className="text-2xl font-black mb-2">No destinations found</h3>
+            <h3 className="text-2xl font-black mb-2">Available soon</h3>
             <p className="text-muted-foreground text-lg">Try adjusting your search or switching categories.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {filteredCities.map((city, idx) => (
+              <Reveal key={city.id} delay={Math.min(idx, 8) * 60}>
               <Card 
-                key={city.id} 
-                className={`overflow-hidden border-0 shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer group bg-background rounded-3xl animate-in fade-in slide-in-from-bottom-12 fill-mode-both ${idx === 0 && category === 'trending' ? 'sm:col-span-2 sm:row-span-2' : ''}`}
+                className={`card-pop p-0 gap-0 overflow-hidden border-0 shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer group bg-background rounded-3xl animate-in fade-in slide-in-from-bottom-12 fill-mode-both ${idx === 0 && category === 'trending' ? 'sm:col-span-2 sm:row-span-2' : ''}`}
                 style={{ animationDelay: `${idx * 50}ms` }}
                 onClick={() => handleCityClick(city)}
               >
                 <div className={`w-full relative overflow-hidden bg-muted ${idx === 0 && category === 'trending' ? 'h-64 sm:h-[400px]' : 'h-64'}`}>
-                  {city.imageUrl ? (
-                    <img src={city.imageUrl} alt={city.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+                  {city.imageUrl && !brokenImages.has(city.id) ? (
+                    <img
+                      src={city.imageUrl}
+                      alt={city.name}
+                      onError={() =>
+                        setBrokenImages((prev) => new Set(prev).add(city.id))
+                      }
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                    />
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/30 bg-zinc-100 dark:bg-zinc-900">
-                      <Navigation className="w-12 h-12 mb-2" />
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-secondary text-primary/40">
+                      <Navigation className="w-10 h-10" />
+                      <span className="text-xs font-semibold uppercase tracking-widest">
+                        No photo yet
+                      </span>
                     </div>
                   )}
                   
@@ -148,8 +161,8 @@ export default function DiscoverPage() {
                   
                   {/* Category Badges */}
                   <div className="absolute top-4 left-4 flex gap-2">
-                    {city.popularity > 80 && <Badge className="bg-rose-500 hover:bg-rose-600 border-0 font-black"><TrendingUp className="w-3 h-3 mr-1"/> HOT</Badge>}
-                    {city.costIndex < 50 && <Badge className="bg-emerald-500 hover:bg-emerald-600 border-0 font-black">BUDGET</Badge>}
+                    {city.popularity > 80 && <Badge className="bg-high-sea text-marine hover:bg-high-sea/90 border-0 font-black"><TrendingUp className="w-3 h-3 mr-1"/> HOT</Badge>}
+                    {city.costIndex < 50 && <Badge className="bg-wave text-white hover:bg-wave/90 border-0 font-black">BUDGET</Badge>}
                   </div>
 
                   {/* Content Overlay */}
@@ -163,6 +176,7 @@ export default function DiscoverPage() {
                   </div>
                 </div>
               </Card>
+              </Reveal>
             ))}
           </div>
         )}
