@@ -44,7 +44,7 @@ export function HeroSlider({ firstName }: { firstName: string }) {
       onBlurCapture={() => setPaused(false)}
     >
       {/* ---------- the sliding track ---------- */}
-      <div className="relative h-[260px] w-full overflow-hidden sm:h-[380px]">
+      <div className="relative h-[340px] w-full overflow-hidden sm:h-[460px] lg:h-[540px]">
         <div
           className={cn(
             "flex h-full w-full",

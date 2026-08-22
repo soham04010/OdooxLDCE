@@ -206,3 +206,31 @@ export const featuredPlaces: FeaturedPlace[] = [
       "The Taj at sunrise, before the crowds and the heat. Two days is enough to add Fatehpur Sikri and the fort.",
   },
 ];
+
+/** Trips that have not happened yet — "Preplanned" on the profile screen. */
+export const upcomingTrips: Trip[] = [
+  {
+    id: "u1",
+    name: "Spiti in the snow",
+    startDate: "2026-11-03",
+    endDate: "2026-11-11",
+    stopCount: 4,
+    coverPhotoUrl: "/cities/sarahan.jpg",
+  },
+  {
+    id: "u2",
+    name: "Pangong and back",
+    startDate: "2026-09-12",
+    endDate: "2026-09-18",
+    stopCount: 2,
+    coverPhotoUrl: "/cities/pangong.jpg",
+  },
+  {
+    id: "u3",
+    name: "Temples of the coast",
+    startDate: "2026-12-20",
+    endDate: "2026-12-27",
+    stopCount: 3,
+    coverPhotoUrl: "/cities/murudeshwar.jpg",
+  },
+];
