@@ -362,7 +362,7 @@ export default function ProfilePage() {
           </div>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             onClick={handleSignOut}
             className="h-9 gap-2 px-3"
           >
