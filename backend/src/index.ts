@@ -5,8 +5,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { users, trips, cities, tripStops, activities, tripActivities } from './db/schema';
-import { eq, ilike, and, desc, asc } from 'drizzle-orm';
+import { users, trips, cities, tripStops, activities, tripActivities, posts, postLikes, postComments } from './db/schema';
+import { eq, ilike, and, or, desc, asc } from 'drizzle-orm';
 
 dotenv.config();
 
@@ -72,6 +72,147 @@ app.get('/api/auth/me', requireAuth, async (req: any, res: any) => {
   if (!found.length) return res.status(404).json({ error: 'Not found' });
   const { passwordHash, ...safe } = found[0];
   res.json({ user: safe });
+});
+
+app.patch('/api/auth/me', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, avatarUrl } = req.body;
+    const updated = await db.update(users).set({ name, avatarUrl }).where(eq(users.id, req.user.userId)).returning();
+    const { passwordHash, ...safe } = updated[0];
+    res.json({ user: safe });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/me', requireAuth, async (req: any, res: any) => {
+  try {
+    const { name, avatarUrl } = req.body;
+    const updated = await db.update(users).set({ name, avatarUrl }).where(eq(users.id, req.user.userId)).returning();
+    const { passwordHash, ...safe } = updated[0];
+    res.json({ user: safe });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/users/me/posts', requireAuth, async (req: any, res: any) => {
+  try {
+    const p = await db.select({ post: posts, user: users.name, userAvatar: users.avatarUrl })
+      .from(posts).leftJoin(users, eq(posts.userId, users.id))
+      .where(eq(posts.userId, req.user.userId))
+      .orderBy(desc(posts.createdAt));
+      
+    const enriched = await Promise.all(p.map(async (item: any) => {
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, item.post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, item.post.id));
+      return { ...item, likesCount: likes.length, commentsCount: comments.length };
+    }));
+
+    res.json(enriched);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/community/posts', async (req: any, res: any) => {
+  const { q } = req.query;
+  let query: any = db
+    .select({ post: posts, user: users.name, userAvatar: users.avatarUrl })
+    .from(posts)
+    .leftJoin(users, eq(posts.userId, users.id));
+
+  if (q) {
+    query = query.where(
+      or(
+        ilike(posts.title, `%${q}%`),
+        ilike(posts.content, `%${q}%`),
+        ilike(posts.city, `%${q}%`),
+        ilike(posts.country, `%${q}%`)
+      )
+    );
+  }
+
+  const p = await query.orderBy(desc(posts.createdAt)).limit(50);
+  
+  const enriched = await Promise.all(p.map(async (item: any) => {
+    const likes = await db.select().from(postLikes).where(eq(postLikes.postId, item.post.id));
+    const comments = await db.select().from(postComments).where(eq(postComments.postId, item.post.id));
+    return { ...item, likesCount: likes.length, commentsCount: comments.length };
+  }));
+
+  res.json(enriched);
+});
+
+app.post('/api/community/posts', requireAuth, async (req: any, res: any) => {
+  try {
+    const { title, content, imageUrls, country, city } = req.body;
+    const inserted = await db.insert(posts).values({
+      userId: req.user.userId,
+      title,
+      content,
+      imageUrls,
+      country,
+      city
+    }).returning();
+    res.json(inserted[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/community/posts/:id', requireAuth, async (req: any, res: any) => {
+  try {
+    const postData = await db.select({ post: posts, user: users.name, userAvatar: users.avatarUrl })
+      .from(posts).leftJoin(users, eq(posts.userId, users.id)).where(eq(posts.id, req.params.id));
+      
+    if (!postData.length) return res.status(404).json({ error: "Not found" });
+    
+    const comments = await db.select({ comment: postComments, user: users.name, userAvatar: users.avatarUrl })
+      .from(postComments).leftJoin(users, eq(postComments.userId, users.id)).where(eq(postComments.postId, req.params.id)).orderBy(asc(postComments.createdAt));
+      
+    const likes = await db.select().from(postLikes).where(eq(postLikes.postId, req.params.id));
+    const hasLiked = likes.some(l => l.userId === req.user.userId);
+    
+    res.json({ ...postData[0], comments, likesCount: likes.length, hasLiked });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/community/posts/:id/like', requireAuth, async (req: any, res: any) => {
+  try {
+    const existing = await db.select().from(postLikes).where(and(eq(postLikes.postId, req.params.id), eq(postLikes.userId, req.user.userId)));
+    if (existing.length > 0) {
+      await db.delete(postLikes).where(eq(postLikes.id, existing[0].id));
+      res.json({ liked: false });
+    } else {
+      await db.insert(postLikes).values({ postId: req.params.id, userId: req.user.userId });
+      res.json({ liked: true });
+    }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/community/posts/:id/comments', requireAuth, async (req: any, res: any) => {
+  try {
+    const { content } = req.body;
+    const inserted = await db.insert(postComments).values({ postId: req.params.id, userId: req.user.userId, content }).returning();
+    res.json(inserted[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/search', async (req: any, res: any) => {
+  try {
+    const { q, type } = req.query; // type: 'city' or 'activity'
+    let results = [];
+    if (type === 'city' || !type) {
+      const c = await db.select().from(cities).where(ilike(cities.name, `%${q || ''}%`)).limit(20);
+      results.push(...c.map(x => ({ ...x, _resultType: 'city' })));
+    }
+    if (type === 'activity' || !type) {
+      const a = await db.select({ activity: activities, city: cities }).from(activities).leftJoin(cities, eq(activities.cityId, cities.id)).where(ilike(activities.name, `%${q || ''}%`)).limit(20);
+      results.push(...a.map(x => ({ ...x.activity, cityName: x.city?.name, _resultType: 'activity' })));
+    }
+    res.json(results);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/trips/:id/publish', requireAuth, async (req: any, res: any) => {
+  try {
+    const { isPublic, description } = req.body;
+    const updated = await db.update(trips).set({ isPublic, description }).where(eq(trips.id, req.params.id)).returning();
+    res.json(updated[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 // --- DASHBOARD & CITIES ---
@@ -146,13 +287,30 @@ app.get('/api/public/trips/:slug', async (req: any, res: any) => {
 });
 
 app.get('/api/community/trips', async (req: any, res: any) => {
-  const publicTrips = await db
-    .select({ trip: trips, user: users.name })
+  const { q } = req.query;
+  let query: any = db
+    .selectDistinct({ trip: trips, user: users.name })
     .from(trips)
     .leftJoin(users, eq(trips.userId, users.id))
-    .where(eq(trips.isPublic, true))
-    .orderBy(desc(trips.createdAt))
-    .limit(50);
+    .leftJoin(tripStops, eq(trips.id, tripStops.tripId))
+    .leftJoin(cities, eq(tripStops.cityId, cities.id));
+    
+  if (q) {
+    query = query.where(
+      and(
+        eq(trips.isPublic, true),
+        or(
+          ilike(trips.name, `%${q}%`),
+          ilike(cities.name, `%${q}%`),
+          ilike(cities.country, `%${q}%`)
+        )
+      )
+    );
+  } else {
+    query = query.where(eq(trips.isPublic, true));
+  }
+
+  const publicTrips = await query.orderBy(desc(trips.createdAt)).limit(50);
   res.json(publicTrips);
 });
 

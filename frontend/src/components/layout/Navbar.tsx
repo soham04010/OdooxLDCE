@@ -36,6 +36,9 @@ export function Navbar() {
           <Link href="/community" className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground">
             Community
           </Link>
+          <Link href="/calendar" className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground">
+            Calendar
+          </Link>
         </div>
         </div>
         <div className="ml-auto flex items-center space-x-2">
