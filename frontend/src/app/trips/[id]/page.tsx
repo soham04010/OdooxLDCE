@@ -9,6 +9,9 @@ import { Plus, X, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import dynamic from "next/dynamic";
+
+const DynamicBudgetChart = dynamic(() => import("@/components/TripBudgetChart"), { ssr: false });
 
 const CURRENCY_MAP: Record<string, string> = {
   'United States': '$', 'USA': '$', 'India': '₹', 'United Kingdom': '£',
@@ -192,23 +195,38 @@ export default function BuildItineraryPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">GlobalTrotter Itinerary Builder</h1>
           {data && (
-            <Button 
-              variant={data.trip.isPublic ? "secondary" : "default"} 
-              onClick={async () => {
-                const res = await fetch(`http://localhost:5000/api/trips/${tripId}/publish`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ isPublic: !data.trip.isPublic, description: data.trip.description || "My amazing trip!" }),
-                  credentials: "include"
-                });
-                if (res.ok) {
-                  fetchTrip();
-                  alert(data.trip.isPublic ? "Trip made private." : "Trip published to community!");
-                }
-              }}
-            >
-              {data.trip.isPublic ? "Unpublish" : "Publish to Community"}
-            </Button>
+            <div className="flex gap-2">
+              {data.trip.isPublic && (
+                <Button variant="outline" className="border-primary text-primary" onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/trips/share/${tripId}`);
+                  alert("Public link copied to clipboard! You can share this link with anyone.");
+                }}>
+                  Copy Share Link
+                </Button>
+              )}
+              <Button 
+                variant={data.trip.isPublic ? "secondary" : "default"} 
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`http://localhost:5000/api/trips/${tripId}/visibility`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ isPublic: !data.trip.isPublic, description: data.trip.description || "My amazing trip!" }),
+                      credentials: "include"
+                    });
+                    if (res.ok) {
+                      fetchTrip();
+                      alert(data.trip.isPublic ? "Trip made private." : "Trip is now Public! You can copy the share link.");
+                    }
+                  } catch (err) {
+                    console.error("Fetch failed, likely blocked by adblocker:", err);
+                    alert("Failed to update visibility. If you are using Brave or an Adblocker, try turning shields down.");
+                  }
+                }}
+              >
+                {data.trip.isPublic ? "Make Private" : "Publish to Community"}
+              </Button>
+            </div>
           )}
         </div>
 
@@ -220,29 +238,8 @@ export default function BuildItineraryPage() {
         ) : !data ? (
           <div className="text-center py-20 text-muted-foreground border border-dashed rounded-lg">Trip not found or unauthorized</div>
         ) : (
-          <div className="space-y-6">
-            
-            <Card className="border border-border/80 shadow-sm bg-muted/10 mb-8">
-               <CardContent className="p-6 flex flex-col md:flex-row gap-6 justify-between items-center">
-                 <div>
-                   <h2 className="text-lg font-bold mb-1">Overall Expense & Budget</h2>
-                   <p className="text-sm text-muted-foreground">Keep track of your spending across all sections.</p>
-                 </div>
-                 <div className="flex gap-8 text-center">
-                    <div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Budget</div>
-                      <div className="text-2xl font-bold">{mainCurrency}{totalBudget.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Spent</div>
-                      <div className={`text-2xl font-bold ${totalSpend > totalBudget && totalBudget > 0 ? "text-destructive" : ""}`}>
-                        {mainCurrency}{totalSpend.toFixed(2)}
-                      </div>
-                    </div>
-                 </div>
-               </CardContent>
-            </Card>
-
+          <div className="space-y-8">
+            <DynamicBudgetChart data={data} currency={mainCurrency} />
             {data.stops.length === 0 ? (
                <Card className="border border-border text-center py-12 shadow-sm">
                  <h2 className="text-xl font-bold mb-2">No Sections Added</h2>
