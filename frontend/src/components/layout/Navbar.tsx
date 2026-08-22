@@ -36,6 +36,9 @@ export function Navbar() {
             <Link href="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
               Dashboard
             </Link>
+            <Link href="/explore" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+              Explore & Search
+            </Link>
             <Link href="/trips" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
               My Trips
             </Link>

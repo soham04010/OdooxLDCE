@@ -21,13 +21,18 @@ export const metadata: Metadata = {
     "Plan trips worth taking — build itineraries, pick cities and activities, and share the weekend.",
 };
 
+import { Toaster } from "sonner";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Toaster richColors position="top-right" />
+      </body>
     </html>
   );
 }

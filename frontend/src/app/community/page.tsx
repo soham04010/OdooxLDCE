@@ -9,6 +9,7 @@ import { Search, MapPin, Calendar, Camera, ExternalLink, Plus, X, Heart, Message
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
+import { toast } from "sonner";
 import { PostModal } from "@/components/community/PostModal";
 import { ImageCarousel } from "@/components/community/ImageCarousel";
 
@@ -75,9 +76,10 @@ export default function CommunityPage() {
       }
 
       setNewPost(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...uploadedUrls] }));
+      toast.success(`${uploadedUrls.length} image(s) uploaded!`);
     } catch (err) {
       console.error(err);
-      alert("Error uploading images");
+      toast.error("Error uploading images");
     } finally {
       setUploadingImage(false);
     }
@@ -97,10 +99,12 @@ export default function CommunityPage() {
       if (res.ok) {
         setIsCreating(false);
         setNewPost({ title: "", content: "", city: "", country: "", imageUrls: [] });
+        toast.success("Post published to community!");
         fetchPosts(search);
       }
     } catch (err) {
       console.error(err);
+      toast.error("Failed to publish post");
     }
   };
 

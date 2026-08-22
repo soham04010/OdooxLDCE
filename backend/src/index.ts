@@ -366,14 +366,52 @@ app.post('/api/activities', requireAuth, async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/stops/:stopId/activities', requireAuth, async (req: any, res: any) => {
+app.post('/api/trips/:id/copy', requireAuth, async (req: any, res: any) => {
   try {
-    const { activityId, dayNumber, startTime, category, notes, costOverride } = req.body;
-    const item = await db.insert(tripActivities).values({
-      stopId: req.params.stopId, activityId, dayNumber, startTime, category, notes, costOverride
+    const originalTrip = await db.select().from(trips).where(eq(trips.id, req.params.id));
+    if (!originalTrip.length) return res.status(404).json({ error: 'Trip not found' });
+    
+    // Strip trailing (Copy) patterns
+    const baseName = originalTrip[0].name.replace(/(\s*\(Copy(\s*\d+)?\))+$/gi, '').trim();
+
+    const newTrip = await db.insert(trips).values({
+      userId: req.user.userId,
+      name: `${baseName} (Copy)`,
+      description: originalTrip[0].description,
+      startDate: originalTrip[0].startDate,
+      endDate: originalTrip[0].endDate,
+      coverPhotoUrl: originalTrip[0].coverPhotoUrl,
+      isPublic: false
     }).returning();
-    res.status(201).json(item[0]);
+
+    const originalStops = await db.select().from(tripStops).where(eq(tripStops.tripId, originalTrip[0].id));
+    for (const stop of originalStops) {
+      const newStop = await db.insert(tripStops).values({
+        tripId: newTrip[0].id,
+        cityId: stop.cityId,
+        orderIndex: stop.orderIndex,
+        startDate: stop.startDate,
+        endDate: stop.endDate,
+        budget: stop.budget
+      }).returning();
+
+      const origActs = await db.select().from(tripActivities).where(eq(tripActivities.stopId, stop.id));
+      for (const act of origActs) {
+        await db.insert(tripActivities).values({
+          stopId: newStop[0].id,
+          activityId: act.activityId,
+          dayNumber: act.dayNumber,
+          startTime: act.startTime,
+          category: act.category,
+          costOverride: act.costOverride,
+          notes: act.notes
+        });
+      }
+    }
+
+    res.status(201).json(newTrip[0]);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.listen(port, () => console.log(`API running on ${port}`));
+

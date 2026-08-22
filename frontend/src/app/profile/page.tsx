@@ -14,6 +14,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 
+import { toast } from "sonner";
 import { ImageCarousel } from "@/components/community/ImageCarousel";
 import { PostModal } from "@/components/community/PostModal";
 import { Navbar } from "@/components/layout/Navbar";
@@ -242,7 +243,7 @@ export default function ProfilePage() {
         const uploadError = (await uploadResponse.json()) as {
           error?: { message?: string };
         };
-        alert(
+        toast.error(
           `Cloudinary Error: ${uploadError.error?.message || "Check console"}`
         );
         return;
@@ -264,9 +265,10 @@ export default function ProfilePage() {
       );
 
       if (!updateResponse.ok) {
-        alert("Failed to update backend");
+        toast.error("Failed to update backend");
         throw new Error(`Backend update failed: ${updateResponse.status}`);
       }
+      toast.success("Profile photo updated!");
 
       const updateData = (await updateResponse.json()) as {
         user: Partial<Profile> & Pick<Profile, "name" | "email">;
