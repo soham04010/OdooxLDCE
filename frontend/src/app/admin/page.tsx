@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Navbar } from "@/components/layout/Navbar";
+import { AdminNavbar } from "@/components/layout/AdminNavbar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { 
   Users, 
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <Navbar />
+        <AdminNavbar />
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-marine border-t-transparent" />
         </div>
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background font-sans text-foreground">
-      <Navbar />
+      <AdminNavbar />
 
       <main className="container mx-auto p-6 md:p-10 max-w-7xl">
         {/* Clean Enterprise Header */}
